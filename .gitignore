@@ -1,5 +1,6 @@
 .DS_Store
 .build/
+.worktrees/
 DerivedData/
 *.xcuserdata/
 *.xcuserstate
@@ -8,7 +9,7 @@ DerivedData/
 *.log
 
 # Local/private source material and generated decks
-Sources/
+SourceMaterial/
 Output/
 *.epub
 *.apkg

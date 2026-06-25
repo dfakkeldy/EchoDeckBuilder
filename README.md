@@ -12,6 +12,8 @@ The missing product gap is external deck creation. Echo's current JSON deck impo
 
 Build a Mac-first tool that takes a private EPUB, creates balanced mixed flashcards for me, and exports a deck that can be anchored back to the EPUB sections Echo displays.
 
+EchoDeckBuilder's Echo export target is Echo deck import vNext: every Echo-ready card should carry a portable source anchor shaped like `s<i>-b<j>`. Echo is responsible for resolving that portable suffix to the local `epub_block.id` for the selected book and storing it in `flashcard.source_block_id`.
+
 Default deck profile:
 
 - Size: balanced
@@ -44,15 +46,17 @@ Likely end state:
 3. Split the book into stable blocks that can map to Echo's `epub_block` model.
 4. Generate candidate cards from each section.
 5. Preserve a source anchor per card:
+   - canonical Echo portable block suffix, for example `s4-b12`
    - EPUB spine href
    - fragment/id when present
    - section heading
    - normalized text fingerprint
-   - optional Echo `epub_block.id` after matching against an imported Echo database
+   - optional local Echo `epub_block.id` only as a validation/matching aid, never as the exported canonical anchor
 6. Let me review, edit, accept, reject, and tag cards.
 7. Export:
    - Anki TSV/APKG for normal Anki use
-   - Echo deck JSON vNext for source-block-aware import
+   - Echo deck JSON vNext with per-card `sourceAnchor`
+   - APKG with archive-root `echo-import.json` sidecar for Echo-aware APKG import
 
 ## Echo Integration Finding
 
@@ -68,43 +72,70 @@ From the Echo repo inspection:
 
 Conclusion: Echo supports EPUB-anchored cards internally, but the external deck import format needs a vNext schema before this app can produce a fully Echo-ready import.
 
-## Draft Echo Deck JSON vNext
+## Echo Source Anchor Import Contract
+
+The Echo-side import contract for this app is based on `docs/superpowers/specs/2026-06-25-deck-import-source-anchors-design.md` in the Echo repo.
+
+Canonical source anchors use Echo's portable EPUB block suffix:
+
+```text
+s<i>-b<j>
+```
+
+Example Echo deck JSON vNext:
 
 ```json
 {
   "deckName": "Everything but the Code",
   "targetMediaID": "file:///path/or/echo/audiobook/id",
-  "source": {
-    "kind": "epub",
-    "title": "Everything but the Code",
-    "author": "Paul Hudson",
-    "fingerprint": "stable-book-fingerprint"
-  },
   "cards": [
     {
       "frontText": "What is the core purpose of a strategic anchor?",
       "backText": "It gives you a clear decision rule for choosing work that advances your goal.",
-      "cardType": "basic",
+      "startTime": 0,
+      "endTime": 0,
       "triggerTiming": "manualOnly",
-      "source": {
-        "spineHref": "chapter.xhtml",
-        "fragmentID": "optional-html-id",
-        "heading": "Vision and Goals",
-        "textFingerprint": "stable-block-fingerprint",
-        "echoBlockID": "optional-when-known"
-      }
+      "sourceAnchor": "s4-b12"
     }
   ]
 }
 ```
 
-Echo-side work needed:
+Example Echo-aware APKG sidecar at archive root, named `echo-import.json`:
 
-1. Add optional source fields to `FlashcardDeckImport.ImportedCard`.
-2. Resolve `echoBlockID` directly when present and valid.
-3. Otherwise resolve by `spineHref`, `fragmentID`, heading, and text fingerprint.
-4. Store the resolved value in `Flashcard.sourceBlockID`.
-5. Keep `startTime` and `endTime` as optional fallback fields for audiobook-only decks.
+```json
+{
+  "formatVersion": 1,
+  "targetMediaID": "file:///path/or/echo/audiobook/id",
+  "cards": [
+    {
+      "cardID": 1712345678901,
+      "noteGUID": "anki-note-guid",
+      "sourceAnchor": "s4-b12",
+      "startTime": 0,
+      "endTime": 0,
+      "triggerTiming": "manualOnly"
+    }
+  ]
+}
+```
+
+Echo-side import behavior this app depends on:
+
+1. `FlashcardDeckImport.ImportedCard` accepts optional `sourceAnchor`.
+2. `DeckImportService` resolves `sourceAnchor` against `deck.targetMediaID`.
+3. `ApkgImportService` reads optional `echo-import.json` and maps entries by Anki `cardID`, then `noteGUID`.
+4. A shared `EPUBSourceAnchorResolver` accepts canonical suffixes like `s4-b12`, accepts legacy full IDs by stripping to the suffix, rebuilds the local `epub-\(targetMediaID)-\(suffix)` ID, and validates both `id` and `audiobook_id`.
+5. Bad, malformed, unresolved, or wrong-book anchors are warnings, not fatal errors. The card still imports with `sourceBlockID: nil` and uses existing timestamp/manual fallback placement.
+6. `FlashcardDAO.syncToTimeline` writes `TimelineItem.epubBlockID` for anchored imported cards.
+7. Existing JSON and APKG decks keep importing unchanged.
+
+Out of scope for this vNext contract:
+
+- Native EPUB `href#fragment` anchors.
+- Persisting XHTML element-ID to block-ID maps.
+- Reparsing EPUBs during Echo deck import.
+- Adding a foreign key to `flashcard.source_block_id`.
 
 ## App Shape
 
