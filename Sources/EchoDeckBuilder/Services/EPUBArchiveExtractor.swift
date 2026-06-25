@@ -25,13 +25,21 @@ public struct EPUBArchiveExtractor: Sendable {
         process.executableURL = URL(fileURLWithPath: "/usr/bin/unzip")
         process.arguments = ["-Z1", epubURL.path]
 
-        let standardOutput = Pipe()
-        let standardError = Pipe()
+        let outputFiles = try ProcessOutputFiles()
+        defer { outputFiles.cleanup() }
+
+        let standardOutput = try FileHandle(forWritingTo: outputFiles.standardOutputURL)
+        let standardError = try FileHandle(forWritingTo: outputFiles.standardErrorURL)
+        defer {
+            try? standardOutput.close()
+            try? standardError.close()
+        }
+
         process.standardOutput = standardOutput
         process.standardError = standardError
 
-        try run(process: process, standardError: standardError)
-        let data = standardOutput.fileHandleForReading.readDataToEndOfFile()
+        try run(process: process, standardErrorURL: outputFiles.standardErrorURL)
+        let data = try Data(contentsOf: outputFiles.standardOutputURL)
         let output = String(data: data, encoding: .utf8) ?? ""
         let paths = output.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
 
@@ -45,10 +53,15 @@ public struct EPUBArchiveExtractor: Sendable {
         process.executableURL = URL(fileURLWithPath: "/usr/bin/unzip")
         process.arguments = ["-q", epubURL.path, "-d", destination.path]
 
-        let standardError = Pipe()
+        let outputFiles = try ProcessOutputFiles()
+        defer { outputFiles.cleanup() }
+
+        let standardError = try FileHandle(forWritingTo: outputFiles.standardErrorURL)
+        defer { try? standardError.close() }
+
         process.standardError = standardError
 
-        try run(process: process, standardError: standardError)
+        try run(process: process, standardErrorURL: outputFiles.standardErrorURL)
     }
 
     private func validateExtractedContents(at destination: URL) throws {
@@ -73,7 +86,7 @@ public struct EPUBArchiveExtractor: Sendable {
         }
     }
 
-    private func run(process: Process, standardError: Pipe) throws {
+    private func run(process: Process, standardErrorURL: URL) throws {
         do {
             try process.run()
         } catch {
@@ -82,11 +95,33 @@ public struct EPUBArchiveExtractor: Sendable {
         process.waitUntilExit()
 
         guard process.terminationStatus == 0 else {
-            let data = standardError.fileHandleForReading.readDataToEndOfFile()
+            let data = (try? Data(contentsOf: standardErrorURL)) ?? Data()
             let message = String(data: data, encoding: .utf8)?
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             ?? "unzip exited with \(process.terminationStatus)"
             throw EPUBExtractionError.unzipFailed(message)
         }
+    }
+}
+
+private struct ProcessOutputFiles {
+    let standardOutputURL: URL
+    let standardErrorURL: URL
+
+    init() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("EchoDeckBuilderProcessOutput", isDirectory: true)
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+
+        standardOutputURL = directory.appendingPathComponent("stdout.txt")
+        standardErrorURL = directory.appendingPathComponent("stderr.txt")
+
+        FileManager.default.createFile(atPath: standardOutputURL.path, contents: nil)
+        FileManager.default.createFile(atPath: standardErrorURL.path, contents: nil)
+    }
+
+    func cleanup() {
+        try? FileManager.default.removeItem(at: standardOutputURL.deletingLastPathComponent())
     }
 }

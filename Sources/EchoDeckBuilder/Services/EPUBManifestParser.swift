@@ -20,9 +20,14 @@ public final class EPUBManifestParser: NSObject, XMLParserDelegate {
         super.init()
     }
 
-    public func spineItems(fromPackageData data: Data, packageDirectory: URL) throws -> [EPUBSpineItem] {
+    public func spineItems(
+        fromPackageData data: Data,
+        packageDirectory: URL,
+        extractionRootURL: URL? = nil
+    ) throws -> [EPUBSpineItem] {
         manifest = [:]
         spineIDRefs = []
+        let rootURL = extractionRootURL ?? packageDirectory
 
         let parser = XMLParser(data: data)
         parser.delegate = self
@@ -43,7 +48,7 @@ public final class EPUBManifestParser: NSObject, XMLParserDelegate {
             return EPUBSpineItem(
                 spineIndex: offset + 1,
                 href: href,
-                fileURL: try EPUBPathResolver(rootURL: packageDirectory)
+                fileURL: try EPUBPathResolver(rootURL: rootURL)
                     .resolveEPUBPath(href, relativeTo: packageDirectory)
             )
         }

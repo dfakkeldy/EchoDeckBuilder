@@ -56,23 +56,64 @@ final class EPUBManifestParserTests: XCTestCase {
         XCTAssertEqual(items.first?.fileURL, chapterURL.standardizedFileURL.resolvingSymlinksInPath())
     }
 
-    func testRejectsManifestHrefsOutsidePackageRoot() throws {
+    func testAcceptsManifestHrefWithDotSegmentsInsideExtractionRoot() throws {
         let opf = """
         <?xml version="1.0" encoding="UTF-8"?>
         <package xmlns="http://www.idpf.org/2007/opf">
           <manifest>
-            <item id="chap1" href="../outside.xhtml" media-type="application/xhtml+xml"/>
+            <item id="chap1" href="../Text/./chapter%201.xhtml?version=1#body" media-type="application/xhtml+xml"/>
           </manifest>
           <spine>
             <itemref idref="chap1"/>
           </spine>
         </package>
         """
+        let rootURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("EchoDeckBuilderManifestTests-\(UUID().uuidString)", isDirectory: true)
+        let packageDirectory = rootURL
+            .appendingPathComponent("OEBPS", isDirectory: true)
+            .appendingPathComponent("Package", isDirectory: true)
+        try FileManager.default.createDirectory(at: packageDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: rootURL) }
+
+        let items = try EPUBManifestParser().spineItems(
+            fromPackageData: Data(opf.utf8),
+            packageDirectory: packageDirectory,
+            extractionRootURL: rootURL
+        )
+        let expected = rootURL
+            .appendingPathComponent("OEBPS", isDirectory: true)
+            .appendingPathComponent("Text", isDirectory: true)
+            .appendingPathComponent("chapter 1.xhtml")
+            .standardizedFileURL
+            .resolvingSymlinksInPath()
+
+        XCTAssertEqual(items.first?.fileURL, expected)
+    }
+
+    func testRejectsManifestHrefTraversalOutsideExtractionRoot() throws {
+        let opf = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <package xmlns="http://www.idpf.org/2007/opf">
+          <manifest>
+            <item id="chap1" href="../../outside.xhtml" media-type="application/xhtml+xml"/>
+          </manifest>
+          <spine>
+            <itemref idref="chap1"/>
+          </spine>
+        </package>
+        """
+        let rootURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("EchoDeckBuilderManifestTests-\(UUID().uuidString)", isDirectory: true)
+        let packageDirectory = rootURL.appendingPathComponent("OEBPS", isDirectory: true)
+        try FileManager.default.createDirectory(at: packageDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: rootURL) }
 
         XCTAssertThrowsError(
             try EPUBManifestParser().spineItems(
                 fromPackageData: Data(opf.utf8),
-                packageDirectory: FileManager.default.temporaryDirectory
+                packageDirectory: packageDirectory,
+                extractionRootURL: rootURL
             )
         )
     }

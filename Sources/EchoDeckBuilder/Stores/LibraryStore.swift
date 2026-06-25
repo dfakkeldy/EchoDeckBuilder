@@ -69,7 +69,7 @@ public final class LibraryStore {
     }
 
     public var canExportEchoDeck: Bool {
-        !targetMediaID.isEmpty && cards.contains { $0.reviewState == .accepted }
+        !normalizedTargetMediaID.isEmpty && cards.contains { $0.reviewState == .accepted }
     }
 
     public func selectSection(_ sectionID: BookSection.ID?) {
@@ -147,7 +147,11 @@ public final class LibraryStore {
     }
 
     public func echoDeckJSONData() throws -> Data {
-        try EchoDeckJSONExporter().export(deckName: deckName, targetMediaID: targetMediaID, cards: cards)
+        try EchoDeckJSONExporter().export(
+            deckName: deckName,
+            targetMediaID: normalizedTargetMediaID,
+            cards: cards
+        )
     }
 
     public func ankiTSV() -> String {
@@ -289,7 +293,8 @@ public final class LibraryStore {
             let packageDirectory = packageURL.deletingLastPathComponent()
             let spineItems = try EPUBManifestParser().spineItems(
                 fromPackageData: packageData,
-                packageDirectory: packageDirectory
+                packageDirectory: packageDirectory,
+                extractionRootURL: extractedURL
             )
             let extractor = XHTMLBlockExtractor()
 
@@ -306,6 +311,10 @@ public final class LibraryStore {
                 sections: sections
             )
         }.value
+    }
+
+    private var normalizedTargetMediaID: String {
+        targetMediaID.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
 

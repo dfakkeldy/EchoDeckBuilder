@@ -9,11 +9,10 @@ public struct FixtureCardGenerator: CardGenerator {
 
     public func generateCards(for sections: [BookSection]) async throws -> [DeckCard] {
         sections.map { section in
-            let concept = Self.concept(from: section)
             let backText = Self.makeBackText(from: section.text, section: section)
             return DeckCard(
                 sectionID: section.id,
-                frontText: "What is the key idea in \(concept)?",
+                frontText: Self.frontText(for: section),
                 backText: backText,
                 kind: .basic,
                 tags: ["generated", "fixture"],
@@ -22,9 +21,8 @@ public struct FixtureCardGenerator: CardGenerator {
         }
     }
 
-    private static func concept(from section: BookSection) -> String {
-        let heading = section.heading.trimmingCharacters(in: .whitespacesAndNewlines)
-        return heading.isEmpty || heading == "Untitled Section" ? "this section" : heading.lowercased()
+    private static func frontText(for section: BookSection) -> String {
+        "What is the key idea in section \(section.spineIndex), block \(section.blockIndex)?"
     }
 
     private static func makeBackText(from body: String, section: BookSection) -> String {

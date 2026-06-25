@@ -43,4 +43,21 @@ final class FixtureCardGeneratorTests: XCTestCase {
         XCTAssertEqual(cards[0].backText, "This anchored block has no extractable body terms, so review should inspect the source passage.")
         XCTAssertFalse(cards[0].frontText.isEmpty)
     }
+
+    func testGeneratorDoesNotCopyLongHeadingIntoFrontText() async throws {
+        let anchor = try XCTUnwrap(SourceAnchor(suffix: "s8-b2"))
+        let longHeading = "This heading is intentionally sentence-like and long enough that it should never be copied verbatim into a generated card front"
+        let section = BookSection(
+            spineIndex: 8,
+            blockIndex: 2,
+            heading: longHeading,
+            text: "Careful summaries should preserve anchors while avoiding copied source headings.",
+            anchor: anchor
+        )
+
+        let cards = try await FixtureCardGenerator().generateCards(for: [section])
+
+        XCTAssertEqual(cards[0].frontText, "What is the key idea in section 8, block 2?")
+        XCTAssertFalse(cards[0].frontText.contains(longHeading))
+    }
 }

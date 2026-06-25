@@ -89,6 +89,23 @@ final class LibraryStoreTests: XCTestCase {
         XCTAssertEqual(object["targetMediaID"] as? String, "file:///Books/Example")
     }
 
+    func testExportTrimsTargetMediaIDAndRejectsWhitespaceOnlyValue() throws {
+        let fixture = try makeFixture()
+        let store = LibraryStore(sections: [fixture.section], cards: [fixture.card])
+
+        store.accept(cardID: fixture.card.id)
+        store.targetMediaID = " \n\t "
+
+        XCTAssertFalse(store.canExportEchoDeck)
+
+        store.targetMediaID = "  file:///Books/Example  \n"
+        let data = try store.echoDeckJSONData()
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+
+        XCTAssertTrue(store.canExportEchoDeck)
+        XCTAssertEqual(object["targetMediaID"] as? String, "file:///Books/Example")
+    }
+
     func testGenerateCardsPreventsOverlappingRequests() async throws {
         let fixture = try makeFixture()
         let generatedCard = DeckCard(

@@ -50,6 +50,10 @@ public struct EPUBPathResolver: Sendable {
     }
 
     public static func decodedRelativePath(fromURI rawURI: String) throws -> String {
+        try decodedRelativePathComponents(fromURI: rawURI).joined(separator: "/")
+    }
+
+    private static func decodedRelativePathComponents(fromURI rawURI: String) throws -> [String] {
         let trimmed = rawURI.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
             throw EPUBExtractionError.invalidEPUBPath(rawURI)
@@ -71,30 +75,32 @@ public struct EPUBPathResolver: Sendable {
         }
 
         if let components = URLComponents(string: queryless) {
-            guard components.scheme == nil, components.host == nil, components.user == nil else {
+            guard components.scheme == nil, components.host == nil, components.user == nil, components.password == nil else {
                 throw EPUBExtractionError.invalidEPUBPath(rawURI)
             }
         }
 
         let encodedPath = URLComponents(string: queryless)?.percentEncodedPath ?? queryless
-        guard let decodedPath = encodedPath.removingPercentEncoding, !decodedPath.isEmpty else {
+        guard !encodedPath.hasPrefix("/"), !encodedPath.hasPrefix("\\"), !encodedPath.contains("\\") else {
             throw EPUBExtractionError.invalidEPUBPath(rawURI)
         }
 
-        guard !decodedPath.hasPrefix("/"), !decodedPath.hasPrefix("\\"), !decodedPath.contains("\\") else {
+        let encodedComponents = encodedPath.split(separator: "/", omittingEmptySubsequences: false)
+        guard !encodedComponents.isEmpty else {
             throw EPUBExtractionError.invalidEPUBPath(rawURI)
         }
 
-        let components = decodedPath.split(separator: "/", omittingEmptySubsequences: false)
-        guard !components.isEmpty else {
-            throw EPUBExtractionError.invalidEPUBPath(rawURI)
-        }
+        return try encodedComponents.map { component in
+            guard !component.isEmpty,
+                  let decodedComponent = String(component).removingPercentEncoding,
+                  !decodedComponent.isEmpty,
+                  !decodedComponent.contains("/"),
+                  !decodedComponent.contains("\\") else {
+                throw EPUBExtractionError.invalidEPUBPath(rawURI)
+            }
 
-        guard components.allSatisfy({ !$0.isEmpty && $0 != "." && $0 != ".." }) else {
-            throw EPUBExtractionError.invalidEPUBPath(rawURI)
+            return decodedComponent
         }
-
-        return decodedPath
     }
 
     private static func canonicalDirectoryURL(_ url: URL) -> URL {
