@@ -22,6 +22,13 @@ Default deck profile:
 - Source handling: paraphrased cards, no long source quotations
 - Anchoring: every card should carry a source EPUB location
 
+## License
+
+EchoDeckBuilder is licensed under the GNU General Public License, version 3 or
+later (`GPL-3.0-or-later`). See [`LICENSE`](LICENSE) and
+[`LICENSE-APP-STORE-EXCEPTION.md`](LICENSE-APP-STORE-EXCEPTION.md) for the
+additional App Store distribution permission.
+
 ## Product Direction
 
 Build this as its own Mac app first, then add a small Echo integration once the file format is proven.
