@@ -10,8 +10,7 @@ public struct FixtureCardGenerator: CardGenerator {
     public func generateCards(for sections: [BookSection]) async throws -> [DeckCard] {
         sections.map { section in
             let concept = Self.concept(from: section)
-            let keywords = Self.keywords(from: section)
-            let backText = Self.makeBackText(keywords: keywords, concept: concept, section: section)
+            let backText = Self.makeBackText(from: section.text, section: section)
             return DeckCard(
                 sectionID: section.id,
                 frontText: "What is the key idea in \(concept)?",
@@ -28,32 +27,34 @@ public struct FixtureCardGenerator: CardGenerator {
         return heading.isEmpty || heading == "Untitled Section" ? "this section" : heading.lowercased()
     }
 
-    private static func keywords(from section: BookSection) -> [String] {
-        let tokens = tokenize(section.heading) + tokenize(section.text)
-        var keywords: [String] = []
-        var seen = Set<String>()
-
-        for token in tokens where !stopWords.contains(token) && seen.insert(token).inserted {
-            keywords.append(token)
-            if keywords.count == 4 {
-                break
-            }
+    private static func makeBackText(from body: String, section: BookSection) -> String {
+        let meaningfulKeywords = keywords(from: body)
+        if !meaningfulKeywords.isEmpty {
+            return bodyAwareBackText(terms: meaningfulKeywords, section: section)
         }
 
-        return keywords
+        let fallbackTokens = normalizedTokens(from: body)
+        if !fallbackTokens.isEmpty {
+            return bodyAwareBackText(terms: fallbackTokens, section: section)
+        }
+
+        return "This anchored block has no extractable body terms, so review should inspect the source passage."
     }
 
-    private static func tokenize(_ text: String) -> [String] {
+    private static func bodyAwareBackText(terms: [String], section: BookSection) -> String {
+        let termList = terms.prefix(4).joined(separator: ", ")
+        return "Body terms: \(termList). Review section \(section.spineIndex), block \(section.blockIndex)."
+    }
+
+    private static func keywords(from text: String) -> [String] {
+        normalizedTokens(from: text).filter { !stopWords.contains($0) }
+    }
+
+    private static func normalizedTokens(from text: String) -> [String] {
         text
             .lowercased()
             .split { !$0.isLetter && !$0.isNumber }
             .map(String.init)
-    }
-
-    private static func makeBackText(keywords: [String], concept: String, section: BookSection) -> String {
-        let keywordList = keywords.prefix(4).joined(separator: ", ")
-        let keywordPhrase = keywordList.isEmpty ? concept : keywordList
-        return "This section connects \(keywordPhrase) with \(concept) in section \(section.spineIndex), block \(section.blockIndex), giving a concise review target without quoting the source."
     }
 
     private static let stopWords: Set<String> = [
