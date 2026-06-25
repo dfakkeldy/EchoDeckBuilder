@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ContentView: View {
     @Bindable var store: LibraryStore
+    let importEPUB: () -> Void
 
     var body: some View {
         NavigationSplitView {
@@ -18,7 +19,7 @@ struct ContentView: View {
         .toolbar {
             ToolbarItemGroup {
                 Button {
-                    store.requestImportPanel()
+                    importEPUB()
                 } label: {
                     Label("Import EPUB", systemImage: "square.and.arrow.down")
                 }

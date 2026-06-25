@@ -61,6 +61,34 @@ final class LibraryStoreTests: XCTestCase {
         XCTAssertFalse(store.canExportEchoDeck)
     }
 
+    func testEchoDeckJSONDataUsesAcceptedCardsAndTargetMediaID() throws {
+        let anchor = try XCTUnwrap(SourceAnchor(suffix: "s1-b1"))
+        let section = BookSection(
+            spineIndex: 1,
+            blockIndex: 1,
+            heading: "Intro",
+            text: "Text",
+            anchor: anchor
+        )
+        var card = DeckCard(
+            sectionID: section.id,
+            frontText: "Front",
+            backText: "Back",
+            kind: .basic,
+            sourceAnchor: anchor
+        )
+        card.reviewState = .accepted
+        let store = LibraryStore(sections: [section], cards: [card])
+        store.deckName = "Intro Deck"
+        store.targetMediaID = "file:///Books/Example"
+
+        let data = try store.echoDeckJSONData()
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+
+        XCTAssertEqual(object["deckName"] as? String, "Intro Deck")
+        XCTAssertEqual(object["targetMediaID"] as? String, "file:///Books/Example")
+    }
+
     func testGenerateCardsPreventsOverlappingRequests() async throws {
         let fixture = try makeFixture()
         let generatedCard = DeckCard(

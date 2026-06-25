@@ -105,6 +105,43 @@ public final class LibraryStore {
         statusMessage = canExportEchoDeck ? "Echo deck export is ready" : "Accept at least one card and set a target media ID"
     }
 
+    public func importEPUB(at epubURL: URL) async {
+        do {
+            let extractedURL = try await EPUBArchiveExtractor().extract(epubURL: epubURL)
+            let containerURL = extractedURL.appendingPathComponent("META-INF/container.xml")
+            let containerData = try Data(contentsOf: containerURL)
+            let packagePath = try EPUBContainerParser().packagePath(from: containerData)
+            let packageURL = extractedURL.appendingPathComponent(packagePath)
+            let packageData = try Data(contentsOf: packageURL)
+            let packageDirectory = packageURL.deletingLastPathComponent()
+            let spineItems = try EPUBManifestParser().spineItems(fromPackageData: packageData, packageDirectory: packageDirectory)
+            let extractor = XHTMLBlockExtractor()
+
+            var importedSections: [BookSection] = []
+            for item in spineItems {
+                let data = try Data(contentsOf: item.fileURL)
+                importedSections.append(contentsOf: try extractor.sections(from: data, spineIndex: item.spineIndex))
+            }
+
+            sections = importedSections
+            cards = []
+            selectedSectionID = sections.first?.id
+            selectedCardID = nil
+            deckName = epubURL.deletingPathExtension().lastPathComponent
+            statusMessage = "Imported \(sections.count) anchored sections"
+        } catch {
+            statusMessage = "EPUB import failed: \(error.localizedDescription)"
+        }
+    }
+
+    public func echoDeckJSONData() throws -> Data {
+        try EchoDeckJSONExporter().export(deckName: deckName, targetMediaID: targetMediaID, cards: cards)
+    }
+
+    public func ankiTSV() -> String {
+        AnkiTSVExporter().export(cards: cards)
+    }
+
     public func generateCardsForSelectedBook() {
         guard generationTask == nil else {
             statusMessage = "Card generation is already running"
