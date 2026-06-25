@@ -1495,6 +1495,8 @@ git commit -m "feat: add review shell and library store"
 **Files:**
 - Modify: `Sources/EchoDeckBuilder/Stores/LibraryStore.swift`
 - Modify: `Sources/EchoDeckBuilder/App/EchoDeckBuilderApp.swift`
+- Modify: `Sources/EchoDeckBuilder/Views/ContentView.swift`
+- Create: `Sources/EchoDeckBuilder/Services/EPUBContainerParser.swift`
 - Test: `Tests/EchoDeckBuilderTests/LibraryStoreTests.swift`
 
 **Interfaces:**
@@ -1595,6 +1597,11 @@ public final class EPUBContainerParser: NSObject, XMLParserDelegate {
 - [ ] **Step 4: Wire import panel in app commands**
 
 ```swift
+// Sources/EchoDeckBuilder/App/EchoDeckBuilderApp.swift
+import AppKit
+import SwiftUI
+import UniformTypeIdentifiers
+
 private func chooseEPUB() {
     let panel = NSOpenPanel()
     panel.allowedContentTypes = [.epub]
@@ -1606,7 +1613,38 @@ private func chooseEPUB() {
 }
 ```
 
-Use the helper from `EchoDeckBuilderApp` command actions and toolbar import action so both paths call the same store method.
+Use the helper from `EchoDeckBuilderApp` command actions and the toolbar import action so both paths call the same store method. Pass the helper into `ContentView`:
+
+```swift
+// Sources/EchoDeckBuilder/App/EchoDeckBuilderApp.swift
+WindowGroup("EchoDeckBuilder", id: "main") {
+    ContentView(store: library, importEPUB: chooseEPUB)
+        .frame(minWidth: 1040, minHeight: 680)
+}
+```
+
+```swift
+// Sources/EchoDeckBuilder/Views/ContentView.swift
+struct ContentView: View {
+    @Bindable var store: LibraryStore
+    let importEPUB: () -> Void
+
+    var body: some View {
+        // existing split view
+        .toolbar {
+            ToolbarItemGroup {
+                Button {
+                    importEPUB()
+                } label: {
+                    Label("Import EPUB", systemImage: "square.and.arrow.down")
+                }
+
+                // keep the existing Generate Cards and Export Echo Deck buttons
+            }
+        }
+    }
+}
+```
 
 - [ ] **Step 5: Run command tests and build**
 
