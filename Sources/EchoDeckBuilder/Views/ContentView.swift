@@ -1,20 +1,42 @@
 import SwiftUI
 
 struct ContentView: View {
+    @Bindable var store: LibraryStore
+
     var body: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "rectangle.stack.badge.plus")
-                .font(.system(size: 44))
-                .foregroundStyle(.secondary)
-
-            Text("EchoDeckBuilder")
-                .font(.title)
-
-            Text("Import an EPUB, review source-anchored cards, and export Echo deck JSON vNext.")
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: 420)
+        NavigationSplitView {
+            SidebarView(store: store)
+        } content: {
+            SectionListView(store: store)
+        } detail: {
+            CardReviewView(store: store)
         }
-        .padding()
+        .inspector(isPresented: $store.isInspectorPresented) {
+            InspectorView(store: store)
+                .inspectorColumnWidth(min: 260, ideal: 320, max: 380)
+        }
+        .toolbar {
+            ToolbarItemGroup {
+                Button {
+                    store.requestImportPanel()
+                } label: {
+                    Label("Import EPUB", systemImage: "square.and.arrow.down")
+                }
+
+                Button {
+                    store.generateCardsForSelectedBook()
+                } label: {
+                    Label("Generate Cards", systemImage: "sparkles")
+                }
+                .disabled(!store.canGenerateCards)
+
+                Button {
+                    store.requestEchoExportPanel()
+                } label: {
+                    Label("Export Echo Deck", systemImage: "square.and.arrow.up")
+                }
+                .disabled(!store.canExportEchoDeck)
+            }
+        }
     }
 }
