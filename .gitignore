@@ -1,0 +1,21 @@
+.DS_Store
+.build/
+DerivedData/
+*.xcuserdata/
+*.xcuserstate
+*.swp
+*.tmp
+*.log
+
+# Local/private source material and generated decks
+Sources/
+Output/
+*.epub
+*.apkg
+*.sqlite
+*.db
+*.jsonl
+
+# Secrets
+.env
+*.key
