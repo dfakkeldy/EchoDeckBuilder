@@ -43,7 +43,8 @@ public final class EPUBManifestParser: NSObject, XMLParserDelegate {
             return EPUBSpineItem(
                 spineIndex: offset + 1,
                 href: href,
-                fileURL: URL(fileURLWithPath: href, relativeTo: packageDirectory).standardizedFileURL
+                fileURL: try EPUBPathResolver(rootURL: packageDirectory)
+                    .resolveEPUBPath(href, relativeTo: packageDirectory)
             )
         }
     }

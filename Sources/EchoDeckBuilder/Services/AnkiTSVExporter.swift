@@ -4,7 +4,7 @@ public struct AnkiTSVExporter: Sendable {
     public init() {}
 
     public func export(cards: [DeckCard]) -> String {
-        cards
+        let rows = cards
             .filter { $0.reviewState == .accepted }
             .map { card in
                 [
@@ -14,7 +14,12 @@ public struct AnkiTSVExporter: Sendable {
                     card.sourceAnchor.suffix
                 ].joined(separator: "\t")
             }
-            .joined(separator: "\n") + "\n"
+
+        guard !rows.isEmpty else {
+            return ""
+        }
+
+        return rows.joined(separator: "\n") + "\n"
     }
 
     private func sanitize(_ value: String) -> String {

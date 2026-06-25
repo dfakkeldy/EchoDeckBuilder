@@ -3,6 +3,7 @@ import SwiftUI
 struct ContentView: View {
     @Bindable var store: LibraryStore
     let importEPUB: () -> Void
+    let exportEchoDeck: () -> Void
 
     var body: some View {
         NavigationSplitView {
@@ -32,7 +33,7 @@ struct ContentView: View {
                 .disabled(!store.canGenerateCards)
 
                 Button {
-                    store.requestEchoExportPanel()
+                    exportEchoDeck()
                 } label: {
                     Label("Export Echo Deck", systemImage: "square.and.arrow.up")
                 }

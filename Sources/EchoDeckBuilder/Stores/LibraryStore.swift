@@ -13,9 +13,12 @@ public final class LibraryStore {
     public var statusMessage: String
     public var isInspectorPresented: Bool
     public private(set) var isGeneratingCards: Bool
+    public private(set) var isImportingEPUB: Bool
 
     private let generator: any CardGenerator
     @ObservationIgnored private var generationTask: Task<Void, Never>?
+    @ObservationIgnored private var generationToken: UUID?
+    @ObservationIgnored private var importToken: UUID?
 
     public init(
         sections: [BookSection] = [],
@@ -31,6 +34,7 @@ public final class LibraryStore {
         self.statusMessage = "Ready"
         self.isInspectorPresented = true
         self.isGeneratingCards = false
+        self.isImportingEPUB = false
         self.generator = generator
 
         if let firstCardID = cards.first?.id {
@@ -61,7 +65,7 @@ public final class LibraryStore {
     }
 
     public var canGenerateCards: Bool {
-        !sections.isEmpty && !isGeneratingCards
+        !sections.isEmpty && !isGeneratingCards && !isImportingEPUB
     }
 
     public var canExportEchoDeck: Bool {
@@ -106,10 +110,22 @@ public final class LibraryStore {
     }
 
     public func importEPUB(at epubURL: URL) async {
+        guard !isImportingEPUB else {
+            statusMessage = "EPUB import is already running"
+            return
+        }
+
+        let token = UUID()
+        importToken = token
+        isImportingEPUB = true
+        cancelActiveGeneration()
         statusMessage = "Importing EPUB..."
 
         do {
             let importedBook = try await Self.loadImportedBook(from: epubURL)
+            guard importToken == token else {
+                return
+            }
 
             sections = importedBook.sections
             cards = []
@@ -117,8 +133,17 @@ public final class LibraryStore {
             deckName = importedBook.deckName
             statusMessage = "Imported \(sections.count) anchored sections"
         } catch {
+            guard importToken == token else {
+                return
+            }
             statusMessage = "EPUB import failed: \(error.localizedDescription)"
         }
+
+        guard importToken == token else {
+            return
+        }
+        importToken = nil
+        isImportingEPUB = false
     }
 
     public func echoDeckJSONData() throws -> Data {
@@ -135,18 +160,26 @@ public final class LibraryStore {
             return
         }
 
+        guard !isImportingEPUB else {
+            statusMessage = "Wait for EPUB import to finish before generating cards"
+            return
+        }
+
         let generator = self.generator
         let sections = self.sections
         let preferredSectionID = selectedSectionID ?? sections.first?.id
+        let token = UUID()
 
+        generationToken = token
         isGeneratingCards = true
         statusMessage = "Generating draft cards..."
 
-        generationTask = Task { [weak self, generator, sections, preferredSectionID] in
+        generationTask = Task { [weak self, generator, sections, preferredSectionID, token] in
             await self?.runGeneration(
                 using: generator,
                 sections: sections,
-                preferredSectionID: preferredSectionID
+                preferredSectionID: preferredSectionID,
+                token: token
             )
         }
     }
@@ -164,30 +197,41 @@ public final class LibraryStore {
         mutate(&cards[index])
     }
 
+    public func card(id cardID: DeckCard.ID) -> DeckCard? {
+        cards.first { $0.id == cardID }
+    }
+
     private func runGeneration(
         using generator: any CardGenerator,
         sections: [BookSection],
-        preferredSectionID: BookSection.ID?
+        preferredSectionID: BookSection.ID?,
+        token: UUID
     ) async {
         do {
             let generatedCards = try await generator.generateCards(for: sections)
-            finishGeneration(with: generatedCards, preferredSectionID: preferredSectionID)
+            finishGeneration(with: generatedCards, preferredSectionID: preferredSectionID, token: token)
         } catch {
             guard !Task.isCancelled else {
-                cancelGeneration()
+                cancelGeneration(token: token)
                 return
             }
 
-            failGeneration(error)
+            failGeneration(error, token: token)
         }
     }
 
     private func finishGeneration(
         with generatedCards: [DeckCard],
-        preferredSectionID: BookSection.ID?
+        preferredSectionID: BookSection.ID?,
+        token: UUID
     ) {
+        guard generationToken == token else {
+            return
+        }
+
         cards = generatedCards
         generationTask = nil
+        generationToken = nil
         isGeneratingCards = false
         statusMessage = "Generated \(generatedCards.count) draft cards"
 
@@ -200,24 +244,47 @@ public final class LibraryStore {
         }
     }
 
-    private func failGeneration(_ error: any Error) {
+    private func failGeneration(_ error: any Error, token: UUID) {
+        guard generationToken == token else {
+            return
+        }
+
         generationTask = nil
+        generationToken = nil
         isGeneratingCards = false
         statusMessage = "Card generation failed: \(error.localizedDescription)"
     }
 
-    private func cancelGeneration() {
+    private func cancelGeneration(token: UUID) {
+        guard generationToken == token else {
+            return
+        }
+
         generationTask = nil
+        generationToken = nil
+        isGeneratingCards = false
+    }
+
+    private func cancelActiveGeneration() {
+        generationTask?.cancel()
+        generationTask = nil
+        generationToken = nil
         isGeneratingCards = false
     }
 
     nonisolated private static func loadImportedBook(from epubURL: URL) async throws -> ImportedBook {
         try await Task.detached(priority: .userInitiated) {
             let extractedURL = try await EPUBArchiveExtractor().extract(epubURL: epubURL)
-            let containerURL = extractedURL.appendingPathComponent("META-INF/container.xml")
+            defer { try? FileManager.default.removeItem(at: extractedURL) }
+
+            let extractedResolver = EPUBPathResolver(rootURL: extractedURL)
+            let containerURL = try extractedResolver.resolveEPUBPath(
+                "META-INF/container.xml",
+                relativeTo: extractedURL
+            )
             let containerData = try Data(contentsOf: containerURL)
             let packagePath = try EPUBContainerParser().packagePath(from: containerData)
-            let packageURL = extractedURL.appendingPathComponent(packagePath)
+            let packageURL = try extractedResolver.resolveEPUBPath(packagePath, relativeTo: extractedURL)
             let packageData = try Data(contentsOf: packageURL)
             let packageDirectory = packageURL.deletingLastPathComponent()
             let spineItems = try EPUBManifestParser().spineItems(

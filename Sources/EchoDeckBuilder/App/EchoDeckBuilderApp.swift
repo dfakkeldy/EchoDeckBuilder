@@ -27,13 +27,46 @@ struct EchoDeckBuilderApp: App {
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
         if panel.runModal() == .OK, let url = panel.url {
-            Task { await library.importEPUB(at: url) }
+            _ = url.startAccessingSecurityScopedResource()
+            Task {
+                defer { url.stopAccessingSecurityScopedResource() }
+                await library.importEPUB(at: url)
+            }
+        }
+    }
+
+    @MainActor
+    private func chooseEchoDeckExport() {
+        guard library.canExportEchoDeck else {
+            library.requestEchoExportPanel()
+            return
+        }
+
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.json]
+        panel.canCreateDirectories = true
+        panel.nameFieldStringValue = "\(library.deckName).echo-deck.json"
+
+        if panel.runModal() == .OK, let url = panel.url {
+            let didStartAccess = url.startAccessingSecurityScopedResource()
+            defer {
+                if didStartAccess {
+                    url.stopAccessingSecurityScopedResource()
+                }
+            }
+
+            do {
+                try library.echoDeckJSONData().write(to: url, options: .atomic)
+                library.statusMessage = "Exported Echo deck JSON to \(url.lastPathComponent)"
+            } catch {
+                library.statusMessage = "Echo deck export failed: \(error.localizedDescription)"
+            }
         }
     }
 
     var body: some Scene {
         WindowGroup("EchoDeckBuilder", id: "main") {
-            ContentView(store: library, importEPUB: chooseEPUB)
+            ContentView(store: library, importEPUB: chooseEPUB, exportEchoDeck: chooseEchoDeckExport)
                 .frame(minWidth: 1040, minHeight: 680)
         }
         .commands {
@@ -44,7 +77,7 @@ struct EchoDeckBuilderApp: App {
                 .keyboardShortcut("o", modifiers: [.command])
 
                 Button("Export Echo Deck...") {
-                    library.requestEchoExportPanel()
+                    chooseEchoDeckExport()
                 }
                 .keyboardShortcut("e", modifiers: [.command, .shift])
             }

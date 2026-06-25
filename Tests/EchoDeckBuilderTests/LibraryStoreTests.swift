@@ -117,6 +117,33 @@ final class LibraryStoreTests: XCTestCase {
         XCTAssertEqual(store.selectedCardID, generatedCard.id)
     }
 
+    func testImportInvalidatesStaleGenerationCompletion() async throws {
+        let fixture = try makeFixture()
+        let staleCard = DeckCard(
+            sectionID: fixture.section.id,
+            frontText: "Stale front",
+            backText: "Stale back",
+            kind: .basic,
+            sourceAnchor: fixture.section.anchor
+        )
+        let generator = ManuallyCompletingCardGenerator(cards: [staleCard])
+        let store = LibraryStore(sections: [fixture.section], generator: generator)
+        let epubFixture = try TestEPUBFixture.make()
+        defer { epubFixture.cleanup() }
+
+        store.generateCardsForSelectedBook()
+        await generator.waitForGenerationToStart()
+
+        await store.importEPUB(at: epubFixture.epubURL)
+        await generator.finish()
+        try await Task.sleep(nanoseconds: 25_000_000)
+
+        XCTAssertEqual(store.sections.count, 1)
+        XCTAssertEqual(store.sections.first?.heading, "Fixture Chapter")
+        XCTAssertEqual(store.cards, [])
+        XCTAssertFalse(store.isGeneratingCards)
+    }
+
     private func makeFixture(
         heading: String = "Intro",
         suffix: String = "s1-b1",
@@ -159,5 +186,39 @@ private actor CountingCardGenerator: CardGenerator {
 
     func recordedCallCount() -> Int {
         callCount
+    }
+}
+
+private actor ManuallyCompletingCardGenerator: CardGenerator {
+    private let cards: [DeckCard]
+    private var generationContinuation: CheckedContinuation<[DeckCard], Never>?
+    private var startContinuations: [CheckedContinuation<Void, Never>] = []
+
+    init(cards: [DeckCard]) {
+        self.cards = cards
+    }
+
+    func generateCards(for sections: [BookSection]) async throws -> [DeckCard] {
+        startContinuations.forEach { $0.resume() }
+        startContinuations = []
+
+        return await withCheckedContinuation { continuation in
+            generationContinuation = continuation
+        }
+    }
+
+    func waitForGenerationToStart() async {
+        if generationContinuation != nil {
+            return
+        }
+
+        await withCheckedContinuation { continuation in
+            startContinuations.append(continuation)
+        }
+    }
+
+    func finish() {
+        generationContinuation?.resume(returning: cards)
+        generationContinuation = nil
     }
 }

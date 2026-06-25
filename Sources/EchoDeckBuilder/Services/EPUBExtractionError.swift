@@ -2,6 +2,8 @@ import Foundation
 
 public enum EPUBExtractionError: Error, Equatable, Sendable {
     case unzipFailed(String)
+    case invalidArchiveEntryPath(String)
+    case invalidEPUBPath(String)
     case containerParseFailed(String)
     case containerMissingRootfile
     case packageMissingSpine
@@ -14,6 +16,10 @@ extension EPUBExtractionError: LocalizedError {
         switch self {
         case let .unzipFailed(message):
             "EPUB unzip failed: \(message)"
+        case let .invalidArchiveEntryPath(path):
+            "EPUB archive contains an unsafe entry path: \(path)"
+        case let .invalidEPUBPath(path):
+            "EPUB references an unsafe path: \(path)"
         case let .containerParseFailed(message):
             "EPUB container parse failed: \(message)"
         case .containerMissingRootfile:
