@@ -4,7 +4,7 @@ struct SidebarView: View {
     @Bindable var store: LibraryStore
 
     var body: some View {
-        List(selection: $store.selectedSectionID) {
+        List(selection: sectionSelection) {
             Section("Sections") {
                 ForEach(store.sections) { section in
                     Label {
@@ -23,6 +23,13 @@ struct SidebarView: View {
             }
         }
         .listStyle(.sidebar)
-        .navigationTitle("Books")
+        .navigationTitle("Sections")
+    }
+
+    private var sectionSelection: Binding<BookSection.ID?> {
+        Binding(
+            get: { store.selectedSectionID },
+            set: { store.selectSection($0) }
+        )
     }
 }

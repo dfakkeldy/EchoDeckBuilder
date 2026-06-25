@@ -4,7 +4,7 @@ struct SectionListView: View {
     @Bindable var store: LibraryStore
 
     var body: some View {
-        List(selection: $store.selectedCardID) {
+        List(selection: cardSelection) {
             if let section = store.selectedSection {
                 Section(section.heading) {
                     ForEach(store.cards.filter { $0.sectionID == section.id }) { card in
@@ -24,5 +24,12 @@ struct SectionListView: View {
             }
         }
         .navigationTitle("Cards")
+    }
+
+    private var cardSelection: Binding<DeckCard.ID?> {
+        Binding(
+            get: { store.selectedCardID },
+            set: { store.selectCard($0) }
+        )
     }
 }
