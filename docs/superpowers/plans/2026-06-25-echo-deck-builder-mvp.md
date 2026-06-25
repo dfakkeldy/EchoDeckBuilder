@@ -1130,6 +1130,7 @@ final class LibraryStoreTests: XCTestCase {
         let section = BookSection(spineIndex: 1, blockIndex: 1, heading: "Intro", text: "Text", anchor: anchor)
         let card = DeckCard(sectionID: section.id, frontText: "Front", backText: "Back", kind: .basic, sourceAnchor: anchor)
         let store = LibraryStore(sections: [section], cards: [card])
+        store.targetMediaID = "file:///Books/Example"
 
         store.accept(cardID: card.id)
 
@@ -1157,12 +1158,12 @@ public final class LibraryStore {
     public var statusMessage: String
     public var isInspectorPresented: Bool
 
-    private let generator: CardGenerator
+    private let generator: any CardGenerator
 
     public init(
         sections: [BookSection] = [],
         cards: [DeckCard] = [],
-        generator: CardGenerator = FixtureCardGenerator()
+        generator: any CardGenerator = FixtureCardGenerator()
     ) {
         self.sections = sections
         self.cards = cards
