@@ -29,6 +29,12 @@ Private study note compiled from the local EPUB. This file lists referenced work
 | Head First series | O'Reilly / Kathy Sierra and co-authors | Technical book series |
 | Build the Ultimate Portfolio App | Paul Hudson | Hacking with Swift+ course |
 
+## Concepts That Sound Like Titles
+
+| Phrase | Associated People in the EPUB | Notes |
+| --- | --- | --- |
+| Building in public / build in public | Mikaela Caron, Klemens Strasser | Treated in the EPUB as a launch/audience-building practice, not as a specific book title. |
+
 ## Authors / Writers Mentioned Without a Specific Book Title
 
 - Douglas Adams
