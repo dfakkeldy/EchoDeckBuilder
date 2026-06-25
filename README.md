@@ -20,6 +20,23 @@ Default deck profile:
 - Source handling: paraphrased cards, no long source quotations
 - Anchoring: every card should carry a source EPUB location
 
+## Product Direction
+
+Build this as its own Mac app first, then add a small Echo integration once the file format is proven.
+
+Reasoning:
+
+- Deck generation is an authoring workflow: import EPUB, chunk text, choose AI settings, review/edit cards, inspect anchors, dedupe, tag, and export.
+- Echo should stay focused on reading, listening, reviewing, and showing anchored cards in context.
+- A separate app can experiment with model providers, privacy controls, Anki export, and diagnostics without destabilizing Echo.
+- Echo still needs one focused integration: import Echo deck JSON vNext and resolve source anchors into `flashcard.source_block_id`.
+
+Likely end state:
+
+1. EchoDeckBuilder owns deck creation and review.
+2. Echo imports finished decks and displays cards anchored to EPUB blocks.
+3. A later Echo button can open EchoDeckBuilder for the current EPUB, or trigger a simplified built-in generator after the workflow is stable.
+
 ## MVP
 
 1. Import an EPUB locally.
