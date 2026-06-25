@@ -106,28 +106,15 @@ public final class LibraryStore {
     }
 
     public func importEPUB(at epubURL: URL) async {
+        statusMessage = "Importing EPUB..."
+
         do {
-            let extractedURL = try await EPUBArchiveExtractor().extract(epubURL: epubURL)
-            let containerURL = extractedURL.appendingPathComponent("META-INF/container.xml")
-            let containerData = try Data(contentsOf: containerURL)
-            let packagePath = try EPUBContainerParser().packagePath(from: containerData)
-            let packageURL = extractedURL.appendingPathComponent(packagePath)
-            let packageData = try Data(contentsOf: packageURL)
-            let packageDirectory = packageURL.deletingLastPathComponent()
-            let spineItems = try EPUBManifestParser().spineItems(fromPackageData: packageData, packageDirectory: packageDirectory)
-            let extractor = XHTMLBlockExtractor()
+            let importedBook = try await Self.loadImportedBook(from: epubURL)
 
-            var importedSections: [BookSection] = []
-            for item in spineItems {
-                let data = try Data(contentsOf: item.fileURL)
-                importedSections.append(contentsOf: try extractor.sections(from: data, spineIndex: item.spineIndex))
-            }
-
-            sections = importedSections
+            sections = importedBook.sections
             cards = []
-            selectedSectionID = sections.first?.id
-            selectedCardID = nil
-            deckName = epubURL.deletingPathExtension().lastPathComponent
+            selectSection(sections.first?.id)
+            deckName = importedBook.deckName
             statusMessage = "Imported \(sections.count) anchored sections"
         } catch {
             statusMessage = "EPUB import failed: \(error.localizedDescription)"
@@ -223,4 +210,39 @@ public final class LibraryStore {
         generationTask = nil
         isGeneratingCards = false
     }
+
+    nonisolated private static func loadImportedBook(from epubURL: URL) async throws -> ImportedBook {
+        try await Task.detached(priority: .userInitiated) {
+            let extractedURL = try await EPUBArchiveExtractor().extract(epubURL: epubURL)
+            let containerURL = extractedURL.appendingPathComponent("META-INF/container.xml")
+            let containerData = try Data(contentsOf: containerURL)
+            let packagePath = try EPUBContainerParser().packagePath(from: containerData)
+            let packageURL = extractedURL.appendingPathComponent(packagePath)
+            let packageData = try Data(contentsOf: packageURL)
+            let packageDirectory = packageURL.deletingLastPathComponent()
+            let spineItems = try EPUBManifestParser().spineItems(
+                fromPackageData: packageData,
+                packageDirectory: packageDirectory
+            )
+            let extractor = XHTMLBlockExtractor()
+
+            var sections: [BookSection] = []
+            sections.reserveCapacity(spineItems.count)
+
+            for item in spineItems {
+                let data = try Data(contentsOf: item.fileURL)
+                sections.append(contentsOf: try extractor.sections(from: data, spineIndex: item.spineIndex))
+            }
+
+            return ImportedBook(
+                deckName: epubURL.deletingPathExtension().lastPathComponent,
+                sections: sections
+            )
+        }.value
+    }
+}
+
+private struct ImportedBook: Sendable {
+    let deckName: String
+    let sections: [BookSection]
 }

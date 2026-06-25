@@ -11,8 +11,14 @@ public final class EPUBContainerParser: NSObject, XMLParserDelegate {
         rootfilePath = nil
         let parser = XMLParser(data: data)
         parser.delegate = self
-        parser.parse()
-        guard let rootfilePath else {
+
+        guard parser.parse() else {
+            throw EPUBExtractionError.containerParseFailed(
+                parser.parserError?.localizedDescription ?? "Unknown XML parse error"
+            )
+        }
+
+        guard let rootfilePath, !rootfilePath.isEmpty else {
             throw EPUBExtractionError.containerMissingRootfile
         }
         return rootfilePath
