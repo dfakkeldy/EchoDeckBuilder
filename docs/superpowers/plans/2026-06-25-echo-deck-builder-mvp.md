@@ -67,7 +67,7 @@ The README describes multiple independent subsystems. This plan covers the first
 **Interfaces:**
 - Produces: executable product `EchoDeckBuilder`
 - Produces: app entrypoint `EchoDeckBuilderApp`
-- Produces: root view `ContentView`
+- Produces: minimal root view `ContentView`
 
 - [ ] **Step 1: Write the package manifest**
 
@@ -115,74 +115,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 @main
 struct EchoDeckBuilderApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-    @State private var library = LibraryStore()
 
     var body: some Scene {
         WindowGroup("EchoDeckBuilder", id: "main") {
-            ContentView(store: library)
+            ContentView()
                 .frame(minWidth: 1040, minHeight: 680)
-        }
-        .commands {
-            CommandGroup(after: .newItem) {
-                Button("Import EPUB...") {
-                    library.requestImportPanel()
-                }
-                .keyboardShortcut("o", modifiers: [.command])
-
-                Button("Export Echo Deck...") {
-                    library.requestEchoExportPanel()
-                }
-                .keyboardShortcut("e", modifiers: [.command, .shift])
-            }
         }
     }
 }
 ```
 
-- [ ] **Step 3: Write the root view scaffold**
+- [ ] **Step 3: Write the minimal root view**
 
 ```swift
 // Sources/EchoDeckBuilder/Views/ContentView.swift
 import SwiftUI
 
 struct ContentView: View {
-    @Bindable var store: LibraryStore
-
     var body: some View {
-        NavigationSplitView {
-            SidebarView(store: store)
-        } content: {
-            SectionListView(store: store)
-        } detail: {
-            CardReviewView(store: store)
-        }
-        .inspector(isPresented: $store.isInspectorPresented) {
-            InspectorView(store: store)
-                .inspectorColumnWidth(min: 260, ideal: 320, max: 380)
-        }
-        .toolbar {
-            ToolbarItemGroup {
-                Button {
-                    store.requestImportPanel()
-                } label: {
-                    Label("Import EPUB", systemImage: "square.and.arrow.down")
-                }
+        VStack(spacing: 12) {
+            Image(systemName: "rectangle.stack.badge.plus")
+                .font(.system(size: 44))
+                .foregroundStyle(.secondary)
 
-                Button {
-                    store.generateCardsForSelectedBook()
-                } label: {
-                    Label("Generate Cards", systemImage: "sparkles")
-                }
-                .disabled(!store.canGenerateCards)
+            Text("EchoDeckBuilder")
+                .font(.title)
 
-                Button {
-                    store.requestEchoExportPanel()
-                } label: {
-                    Label("Export Echo Deck", systemImage: "square.and.arrow.up")
-                }
-                .disabled(!store.canExportEchoDeck)
-            }
+            Text("Import an EPUB, review source-anchored cards, and export Echo deck JSON vNext.")
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 420)
         }
+        .padding()
     }
 }
 ```
@@ -291,7 +255,7 @@ command = "./script/build_and_run.sh"
 
 Run: `swift build`
 
-Expected: build succeeds after Tasks 2 and 7 provide the referenced types used by `ContentView` and `EchoDeckBuilderApp`.
+Expected: build succeeds.
 
 - [ ] **Step 7: Commit**
 
@@ -1139,6 +1103,8 @@ git commit -m "feat: export anki tsv and diagnostics"
 ### Task 7: Library Store And SwiftUI Review Shell
 
 **Files:**
+- Modify: `Sources/EchoDeckBuilder/App/EchoDeckBuilderApp.swift`
+- Modify: `Sources/EchoDeckBuilder/Views/ContentView.swift`
 - Create: `Sources/EchoDeckBuilder/Stores/LibraryStore.swift`
 - Create: `Sources/EchoDeckBuilder/Views/SidebarView.swift`
 - Create: `Sources/EchoDeckBuilder/Views/SectionListView.swift`
@@ -1260,7 +1226,96 @@ public final class LibraryStore {
 }
 ```
 
-- [ ] **Step 3: Implement sidebar**
+- [ ] **Step 3: Replace app entrypoint with store-backed commands**
+
+```swift
+// Sources/EchoDeckBuilder/App/EchoDeckBuilderApp.swift
+import AppKit
+import SwiftUI
+
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+}
+
+@main
+struct EchoDeckBuilderApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+    @State private var library = LibraryStore()
+
+    var body: some Scene {
+        WindowGroup("EchoDeckBuilder", id: "main") {
+            ContentView(store: library)
+                .frame(minWidth: 1040, minHeight: 680)
+        }
+        .commands {
+            CommandGroup(after: .newItem) {
+                Button("Import EPUB...") {
+                    library.requestImportPanel()
+                }
+                .keyboardShortcut("o", modifiers: [.command])
+
+                Button("Export Echo Deck...") {
+                    library.requestEchoExportPanel()
+                }
+                .keyboardShortcut("e", modifiers: [.command, .shift])
+            }
+        }
+    }
+}
+```
+
+- [ ] **Step 4: Replace root view with split review shell**
+
+```swift
+// Sources/EchoDeckBuilder/Views/ContentView.swift
+import SwiftUI
+
+struct ContentView: View {
+    @Bindable var store: LibraryStore
+
+    var body: some View {
+        NavigationSplitView {
+            SidebarView(store: store)
+        } content: {
+            SectionListView(store: store)
+        } detail: {
+            CardReviewView(store: store)
+        }
+        .inspector(isPresented: $store.isInspectorPresented) {
+            InspectorView(store: store)
+                .inspectorColumnWidth(min: 260, ideal: 320, max: 380)
+        }
+        .toolbar {
+            ToolbarItemGroup {
+                Button {
+                    store.requestImportPanel()
+                } label: {
+                    Label("Import EPUB", systemImage: "square.and.arrow.down")
+                }
+
+                Button {
+                    store.generateCardsForSelectedBook()
+                } label: {
+                    Label("Generate Cards", systemImage: "sparkles")
+                }
+                .disabled(!store.canGenerateCards)
+
+                Button {
+                    store.requestEchoExportPanel()
+                } label: {
+                    Label("Export Echo Deck", systemImage: "square.and.arrow.up")
+                }
+                .disabled(!store.canExportEchoDeck)
+            }
+        }
+    }
+}
+```
+
+- [ ] **Step 5: Implement sidebar**
 
 ```swift
 // Sources/EchoDeckBuilder/Views/SidebarView.swift
@@ -1294,7 +1349,7 @@ struct SidebarView: View {
 }
 ```
 
-- [ ] **Step 4: Implement section list**
+- [ ] **Step 6: Implement section list**
 
 ```swift
 // Sources/EchoDeckBuilder/Views/SectionListView.swift
@@ -1328,7 +1383,7 @@ struct SectionListView: View {
 }
 ```
 
-- [ ] **Step 5: Implement card review**
+- [ ] **Step 7: Implement card review**
 
 ```swift
 // Sources/EchoDeckBuilder/Views/CardReviewView.swift
@@ -1385,7 +1440,7 @@ struct CardReviewView: View {
 }
 ```
 
-- [ ] **Step 6: Implement inspector**
+- [ ] **Step 8: Implement inspector**
 
 ```swift
 // Sources/EchoDeckBuilder/Views/InspectorView.swift
@@ -1419,13 +1474,13 @@ struct InspectorView: View {
 }
 ```
 
-- [ ] **Step 7: Run store tests and app build**
+- [ ] **Step 9: Run store tests and app build**
 
 Run: `swift test --filter LibraryStoreTests && swift build`
 
 Expected: PASS for tests and build.
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 10: Commit**
 
 ```bash
 git add Sources/EchoDeckBuilder/Stores Sources/EchoDeckBuilder/Views Tests/EchoDeckBuilderTests/LibraryStoreTests.swift
