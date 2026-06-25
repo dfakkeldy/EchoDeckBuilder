@@ -21,6 +21,7 @@ final class FixtureCardGeneratorTests: XCTestCase {
         XCTAssertEqual(cards[0].reviewState, .draft)
         XCTAssertTrue(cards[0].backText.contains("section 2"))
         XCTAssertTrue(cards[0].backText.contains("block 3"))
+        XCTAssertTrue(cards[0].backText.contains("prompts") || cards[0].backText.contains("context"))
         XCTAssertNotEqual(cards[0].backText, section.text)
         XCTAssertNotEqual(cards[0].backText, firstSentence)
         XCTAssertFalse(cards[0].frontText.isEmpty)
