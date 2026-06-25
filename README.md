@@ -172,3 +172,23 @@ Good first milestones:
 5. Mac SwiftUI shell around the pipeline.
 
 Avoid third-party dependencies until the first pipeline works with standard library tools and Echo's existing patterns.
+
+## Build And Run
+
+Run tests:
+
+```bash
+swift test
+```
+
+Build and launch the macOS app:
+
+```bash
+./script/build_and_run.sh
+```
+
+Verify launch:
+
+```bash
+./script/build_and_run.sh --verify
+```

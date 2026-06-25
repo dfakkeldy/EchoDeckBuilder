@@ -1671,19 +1671,19 @@ git commit -m "feat: wire epub import and deck export commands"
 - Consumes: full app pipeline from Tasks 1-8
 - Produces: verified local build/test/run instructions
 
-- [ ] **Step 1: Run all tests**
+- [x] **Step 1: Run all tests**
 
 Run: `swift test`
 
 Expected: all tests pass.
 
-- [ ] **Step 2: Build and verify app launch**
+- [x] **Step 2: Build and verify app launch**
 
 Run: `./script/build_and_run.sh --verify`
 
 Expected: exit code 0 and `pgrep -x EchoDeckBuilder` finds a running process.
 
-- [ ] **Step 3: Update README with actual build commands**
+- [x] **Step 3: Update README with actual build commands**
 
 Add this section to `README.md`:
 
@@ -1709,13 +1709,13 @@ Verify launch:
 ```
 ````
 
-- [ ] **Step 4: Review export JSON against the README contract**
+- [x] **Step 4: Review export JSON against the README contract**
 
 Run: `swift test --filter EchoDeckJSONExporterTests`
 
 Expected: PASS, and exported cards contain `sourceAnchor` values shaped like `s<i>-b<j>`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add README.md docs/superpowers/plans/2026-06-25-echo-deck-builder-mvp.md
