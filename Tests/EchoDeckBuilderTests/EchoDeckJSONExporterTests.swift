@@ -53,4 +53,36 @@ final class EchoDeckJSONExporterTests: XCTestCase {
         let cards = try XCTUnwrap(object["cards"] as? [[String: Any]])
         XCTAssertEqual(cards.count, 0)
     }
+
+    func testExportsAcceptedGeneratedDraftCardsAsAnchorOnly() throws {
+        let anchor = try XCTUnwrap(SourceAnchor(suffix: "s3-b7"))
+        let section = BookSection(
+            spineIndex: 3,
+            blockIndex: 7,
+            heading: "Signals",
+            text: "Signals help the review system stay tied to the imported source.",
+            anchor: anchor
+        )
+        let draft = GeneratedCardDraft(
+            frontText: "Why keep the generated card tied to the imported source?",
+            backText: "It preserves traceability without exporting the full source text.",
+            kind: .basic,
+            tags: ["signals"]
+        )
+        var card = try XCTUnwrap(GeneratedCardDraftMapper.deckCard(from: draft, section: section))
+        card.reviewState = .accepted
+
+        let data = try EchoDeckJSONExporter().export(
+            deckName: "Signals",
+            targetMediaID: "echo://signals",
+            cards: [card]
+        )
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let cards = try XCTUnwrap(object["cards"] as? [[String: Any]])
+
+        XCTAssertEqual(cards.count, 1)
+        XCTAssertEqual(cards.first?["sourceAnchor"] as? String, "s3-b7")
+        XCTAssertNil(cards.first?["source"])
+        XCTAssertNil(cards.first?["echoBlockID"])
+    }
 }

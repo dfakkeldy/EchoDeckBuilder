@@ -13,7 +13,7 @@ Use this checklist on a Mac running macOS 26 or newer with an Apple Intelligence
   - "Foundation Models ready"
   - "Foundation Models requires an Apple Intelligence-capable Mac"
   - "Turn on Apple Intelligence in System Settings to use Foundation Models"
-  - "Apple Intelligence is still preparing the language model"
+  - "Apple Intelligence language model assets are downloading or not ready"
   - "Foundation Models does not support the current language"
   - "Foundation Models is unavailable"
 

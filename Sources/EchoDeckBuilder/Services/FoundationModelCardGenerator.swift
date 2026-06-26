@@ -52,7 +52,7 @@ public struct FoundationModelCardGenerator: CardGenerator {
         case .exceededContextWindowSize:
             let shorterPrompt = FoundationModelCardPrompt.prompt(
                 for: section,
-                maxCharacters: max(500, maximumSectionCharacters / 2)
+                maxCharacters: retryMaximumSectionCharacters
             )
             return try await requestCardOrMapFailure(for: section, prompt: shorterPrompt, options: Self.retryOptions)
         case .decodingFailure:
@@ -98,6 +98,14 @@ public struct FoundationModelCardGenerator: CardGenerator {
 
     private static var retryOptions: GenerationOptions {
         GenerationOptions(sampling: .greedy, temperature: 0.0, maximumResponseTokens: 260)
+    }
+
+    private var retryMaximumSectionCharacters: Int {
+        guard maximumSectionCharacters > 1 else {
+            return maximumSectionCharacters
+        }
+
+        return min(maximumSectionCharacters - 1, max(500, maximumSectionCharacters / 2))
     }
 
     private static func cardGenerationError(from error: LanguageModelSession.GenerationError) -> CardGenerationError {
