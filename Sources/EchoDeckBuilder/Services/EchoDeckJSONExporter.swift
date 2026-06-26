@@ -5,7 +5,7 @@ public struct EchoDeckJSONExporter: Sendable {
 
     public func summary(for cards: [DeckCard]) -> EchoDeckExportSummary {
         let acceptedCards = cards.filter { $0.reviewState == .accepted }
-        let sourceAnchoredCards = acceptedCards.filter { $0.sourceAnchor != nil }
+        let sourceAnchoredCards = acceptedCards.map(\.sourceAnchor)
         return EchoDeckExportSummary(
             totalCards: cards.count,
             acceptedCount: acceptedCards.count,
@@ -24,7 +24,7 @@ public struct EchoDeckJSONExporter: Sendable {
                     frontText: card.frontText,
                     backText: card.backText,
                     triggerTiming: "manualOnly",
-                    sourceAnchor: card.sourceAnchor?.suffix ?? ""
+                    sourceAnchor: card.sourceAnchor.suffix
                 )
             }
 

@@ -11,7 +11,7 @@ public struct AnkiTSVExporter: Sendable {
                     sanitize(card.frontText),
                     sanitize(card.backText),
                     card.tags.map(normalizeTag).joined(separator: " "),
-                    card.sourceAnchor?.suffix ?? ""
+                    card.sourceAnchor.suffix
                 ].joined(separator: "\t")
             }
 

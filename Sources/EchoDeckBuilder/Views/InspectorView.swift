@@ -12,7 +12,7 @@ struct InspectorView: View {
 
             if let card = store.selectedCard {
                 Section("Source") {
-                    LabeledContent("Anchor", value: card.sourceAnchor?.suffix ?? "Missing")
+                    LabeledContent("Anchor", value: card.sourceAnchor.suffix)
                     LabeledContent("State", value: card.reviewState.rawValue.capitalized)
                 }
             }
