@@ -7,3 +7,11 @@
   - `swift test` (59 passed)
 - Commit SHA: `550b49b`
 - Concerns: none
+
+## Review Fix
+
+- Summary: After review, generation now selects a fresh draft in the preferred section when one exists, instead of allowing an older accepted card in the same section to keep focus. The regeneration test also now confirms rejected cards are removed with old drafts and the new draft becomes selected.
+- Tests run and results:
+  - `swift test --filter LibraryStoreTests` (13 passed)
+  - `swift test` (59 passed)
+- Commit SHA: Pending.

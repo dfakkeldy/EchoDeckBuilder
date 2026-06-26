@@ -145,6 +145,14 @@ final class LibraryStoreTests: XCTestCase {
             kind: .basic,
             sourceAnchor: fixture.section.anchor
         )
+        var oldRejected = DeckCard(
+            sectionID: fixture.section.id,
+            frontText: "Old rejected",
+            backText: "Old rejected back",
+            kind: .basic,
+            sourceAnchor: fixture.section.anchor
+        )
+        oldRejected.reviewState = .rejected
         let newDraft = DeckCard(
             sectionID: fixture.section.id,
             frontText: "New draft",
@@ -153,14 +161,16 @@ final class LibraryStoreTests: XCTestCase {
             sourceAnchor: fixture.section.anchor
         )
         let generator = ResultCardGenerator(result: CardGenerationResult(bookBrief: .fixture, cards: [newDraft]))
-        let store = LibraryStore(sections: [fixture.section], cards: [accepted, oldDraft], generator: generator)
+        let store = LibraryStore(sections: [fixture.section], cards: [accepted, oldDraft, oldRejected], generator: generator)
 
         store.generateCardsForSelectedBook()
         try await Task.sleep(nanoseconds: 25_000_000)
 
         XCTAssertTrue(store.cards.contains { $0.id == accepted.id && $0.reviewState == .accepted })
         XCTAssertFalse(store.cards.contains { $0.id == oldDraft.id })
+        XCTAssertFalse(store.cards.contains { $0.id == oldRejected.id })
         XCTAssertTrue(store.cards.contains { $0.frontText == "New draft" && $0.reviewState == .draft })
+        XCTAssertEqual(store.selectedCardID, newDraft.id)
     }
 
     func testGenerationRequestIncludesAcceptedCardsAndSettings() async throws {
