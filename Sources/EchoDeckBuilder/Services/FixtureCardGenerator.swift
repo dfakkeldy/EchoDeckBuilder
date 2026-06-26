@@ -1,14 +1,21 @@
 import Foundation
 
 public protocol CardGenerator: Sendable {
-    func generateCards(for sections: [BookSection]) async throws -> [DeckCard]
+    func generateCards(for request: CardGenerationRequest) async throws -> CardGenerationResult
+}
+
+public extension CardGenerator {
+    func generateCards(for sections: [BookSection]) async throws -> [DeckCard] {
+        let result = try await generateCards(for: CardGenerationRequest(sections: sections))
+        return result.cards
+    }
 }
 
 public struct FixtureCardGenerator: CardGenerator {
     public init() {}
 
-    public func generateCards(for sections: [BookSection]) async throws -> [DeckCard] {
-        sections.map { section in
+    public func generateCards(for request: CardGenerationRequest) async throws -> CardGenerationResult {
+        let cards = request.sections.map { section in
             let backText = Self.makeBackText(from: section.text, section: section)
             return DeckCard(
                 sectionID: section.id,
@@ -19,6 +26,8 @@ public struct FixtureCardGenerator: CardGenerator {
                 sourceAnchor: section.anchor
             )
         }
+
+        return CardGenerationResult(bookBrief: .fixture, cards: cards)
     }
 
     private static func frontText(for section: BookSection) -> String {

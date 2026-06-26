@@ -25,6 +25,48 @@ struct InspectorView: View {
                                 : AnyShapeStyle(.red)
                         )
                 }
+
+                TextField("Model", text: generationBinding(\.model))
+
+                Stepper(
+                    value: generationBinding(\.batchSize),
+                    in: 1...30
+                ) {
+                    LabeledContent("Batch size", value: "\(store.generationSettings.batchSize)")
+                }
+
+                Stepper(
+                    value: generationBinding(\.targetCardsPerBatch),
+                    in: 1...30
+                ) {
+                    LabeledContent("Cards per batch", value: "\(store.generationSettings.targetCardsPerBatch)")
+                }
+
+                Picker("Image mode", selection: generationBinding(\.imageMode)) {
+                    ForEach(ImageGenerationMode.allCases) { mode in
+                        Text(mode.displayName).tag(mode)
+                    }
+                }
+            }
+
+            if let latestBookBrief = store.latestBookBrief {
+                Section("Latest Brief") {
+                    Text(latestBookBrief.summary)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            if !store.generationWarnings.isEmpty {
+                Section("Generation Warnings") {
+                    ForEach(store.generationWarnings, id: \.self) { warning in
+                        Label {
+                            Text(warning.message)
+                        } icon: {
+                            Image(systemName: "exclamationmark.triangle")
+                                .foregroundStyle(.yellow)
+                        }
+                    }
+                }
             }
 
             if let card = store.selectedCard {
@@ -41,5 +83,14 @@ struct InspectorView: View {
         }
         .formStyle(.grouped)
         .padding()
+    }
+
+    private func generationBinding<Value>(_ keyPath: WritableKeyPath<GenerationSettings, Value>) -> Binding<Value> {
+        Binding(
+            get: { store.generationSettings[keyPath: keyPath] },
+            set: { newValue in
+                store.generationSettings[keyPath: keyPath] = newValue
+            }
+        )
     }
 }

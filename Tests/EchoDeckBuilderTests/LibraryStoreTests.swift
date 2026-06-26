@@ -124,7 +124,7 @@ final class LibraryStoreTests: XCTestCase {
         XCTAssertTrue(store.isGeneratingCards)
         XCTAssertEqual(store.statusMessage, "Card generation is already running")
 
-        try await Task.sleep(nanoseconds: 100_000_000)
+        try await waitForGenerationToFinish(store)
         let callCount = await generator.recordedCallCount()
 
         XCTAssertFalse(store.isGeneratingCards)
@@ -132,6 +132,133 @@ final class LibraryStoreTests: XCTestCase {
         XCTAssertEqual(store.cards, [generatedCard])
         XCTAssertEqual(store.selectedSectionID, fixture.section.id)
         XCTAssertEqual(store.selectedCardID, generatedCard.id)
+    }
+
+    func testRegenerationPreservesAcceptedCardsAndReplacesDrafts() async throws {
+        let fixture = try makeFixture()
+        var accepted = fixture.card
+        accepted.reviewState = .accepted
+        let oldDraft = DeckCard(
+            sectionID: fixture.section.id,
+            frontText: "Old draft",
+            backText: "Old draft back",
+            kind: .basic,
+            sourceAnchor: fixture.section.anchor
+        )
+        var oldRejected = DeckCard(
+            sectionID: fixture.section.id,
+            frontText: "Old rejected",
+            backText: "Old rejected back",
+            kind: .basic,
+            sourceAnchor: fixture.section.anchor
+        )
+        oldRejected.reviewState = .rejected
+        let newDraft = DeckCard(
+            sectionID: fixture.section.id,
+            frontText: "New draft",
+            backText: "New draft back",
+            kind: .basic,
+            sourceAnchor: fixture.section.anchor
+        )
+        let generator = ResultCardGenerator(result: CardGenerationResult(bookBrief: .fixture, cards: [newDraft]))
+        let store = LibraryStore(sections: [fixture.section], cards: [accepted, oldDraft, oldRejected], generator: generator)
+
+        store.generateCardsForSelectedBook()
+        try await waitForGenerationToFinish(store)
+
+        XCTAssertTrue(store.cards.contains { $0.id == accepted.id && $0.reviewState == .accepted })
+        XCTAssertFalse(store.cards.contains { $0.id == oldDraft.id })
+        XCTAssertFalse(store.cards.contains { $0.id == oldRejected.id })
+        XCTAssertTrue(store.cards.contains { $0.frontText == "New draft" && $0.reviewState == .draft })
+        XCTAssertEqual(store.selectedCardID, newDraft.id)
+    }
+
+    func testRegenerationStaysOnPreferredSectionWhenNoFreshDraftExistsThere() async throws {
+        let preferred = try makeFixture(heading: "Preferred", suffix: "s1-b1", text: "Preferred text")
+        let other = try makeFixture(heading: "Other", suffix: "s1-b2", text: "Other text")
+        var accepted = preferred.card
+        accepted.reviewState = .accepted
+        let otherDraft = DeckCard(
+            sectionID: other.section.id,
+            frontText: "Other draft",
+            backText: "Other draft back",
+            kind: .basic,
+            sourceAnchor: other.section.anchor
+        )
+        let generator = ResultCardGenerator(result: CardGenerationResult(bookBrief: .fixture, cards: [otherDraft]))
+        let store = LibraryStore(
+            sections: [preferred.section, other.section],
+            cards: [accepted],
+            generator: generator
+        )
+        store.selectSection(preferred.section.id)
+
+        store.generateCardsForSelectedBook()
+        try await waitForGenerationToFinish(store)
+
+        XCTAssertEqual(store.selectedSectionID, preferred.section.id)
+        XCTAssertEqual(store.selectedCardID, accepted.id)
+    }
+
+    func testGenerationRequestIncludesAcceptedCardsAndSettings() async throws {
+        let fixture = try makeFixture()
+        var accepted = fixture.card
+        accepted.reviewState = .accepted
+        let generator = RecordingRequestGenerator(result: CardGenerationResult(bookBrief: .fixture, cards: []))
+        let store = LibraryStore(sections: [fixture.section], cards: [accepted], generator: generator)
+        store.selectedGenerationProvider = .claudeCLI
+        store.generationSettings.imageMode = .prompts
+        store.targetMediaID = "  media-123  "
+
+        store.generateCardsForSelectedBook()
+        try await waitForGenerationToFinish(store)
+        let recordedRequest = await generator.recordedRequest()
+        let request = try XCTUnwrap(recordedRequest)
+
+        XCTAssertEqual(request.acceptedCards.map(\.id), [accepted.id])
+        XCTAssertEqual(request.settings.provider, .claudeCLI)
+        XCTAssertEqual(request.settings.imageMode, .prompts)
+        XCTAssertEqual(request.sourceScope, .selectedBook)
+        XCTAssertEqual(request.targetMediaID, "media-123")
+    }
+
+    func testGenerationStoresLatestBriefAndWarnings() async throws {
+        let fixture = try makeFixture()
+        let result = CardGenerationResult(
+            bookBrief: BookBrief(summary: "Fresh brief", themes: ["theme"]),
+            cards: [],
+            warnings: [GenerationWarning(message: "Batch warning")]
+        )
+        let store = LibraryStore(sections: [fixture.section], generator: ResultCardGenerator(result: result))
+
+        store.generateCardsForSelectedBook()
+        try await waitForGenerationToFinish(store)
+
+        XCTAssertEqual(store.latestBookBrief?.summary, "Fresh brief")
+        XCTAssertEqual(store.generationWarnings.map(\.message), ["Batch warning"])
+    }
+
+    func testImportClearsLatestBriefAndWarnings() async throws {
+        let fixture = try makeFixture()
+        let result = CardGenerationResult(
+            bookBrief: BookBrief(summary: "Fresh brief", themes: ["theme"]),
+            cards: [],
+            warnings: [GenerationWarning(message: "Batch warning")]
+        )
+        let store = LibraryStore(sections: [fixture.section], generator: ResultCardGenerator(result: result))
+        let epubFixture = try TestEPUBFixture.make()
+        defer { epubFixture.cleanup() }
+
+        store.generateCardsForSelectedBook()
+        try await waitForGenerationToFinish(store)
+
+        XCTAssertNotNil(store.latestBookBrief)
+        XCTAssertFalse(store.generationWarnings.isEmpty)
+
+        await store.importEPUB(at: epubFixture.epubURL)
+
+        XCTAssertNil(store.latestBookBrief)
+        XCTAssertEqual(store.generationWarnings, [])
     }
 
     func testImportInvalidatesStaleGenerationCompletion() async throws {
@@ -153,7 +280,7 @@ final class LibraryStoreTests: XCTestCase {
 
         await store.importEPUB(at: epubFixture.epubURL)
         await generator.finish()
-        try await Task.sleep(nanoseconds: 25_000_000)
+        await yieldForMainActorWork()
 
         XCTAssertEqual(store.sections.count, 1)
         XCTAssertEqual(store.sections.first?.heading, "Fixture Chapter")
@@ -269,6 +396,26 @@ final class LibraryStoreTests: XCTestCase {
         )
         return (section, card)
     }
+
+    private func waitForGenerationToFinish(
+        _ store: LibraryStore,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) async throws {
+        for _ in 0..<100 {
+            if store.isGeneratingCards == false {
+                return
+            }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTFail("Timed out waiting for card generation to finish.", file: file, line: line)
+    }
+
+    private func yieldForMainActorWork() async {
+        for _ in 0..<5 {
+            await Task.yield()
+        }
+    }
 }
 
 private actor CountingCardGenerator: CardGenerator {
@@ -281,10 +428,10 @@ private actor CountingCardGenerator: CardGenerator {
         self.delayNanoseconds = delayNanoseconds
     }
 
-    func generateCards(for sections: [BookSection]) async throws -> [DeckCard] {
+    func generateCards(for request: CardGenerationRequest) async throws -> CardGenerationResult {
         callCount += 1
         try await Task.sleep(nanoseconds: delayNanoseconds)
-        return cards
+        return CardGenerationResult(bookBrief: .fixture, cards: cards)
     }
 
     func recordedCallCount() -> Int {
@@ -299,6 +446,10 @@ private struct UnavailableFoundationModelResolver: CardGeneratorResolving {
             return .available("Fixture generator ready")
         case .foundationModels:
             return .unavailable("Foundation Models requires macOS 26+")
+        case .claudeCLI:
+            return .available("Claude CLI ready")
+        case .codexCLI:
+            return .available("Codex CLI ready")
         }
     }
 
@@ -337,9 +488,9 @@ private struct RecordingGenerator: CardGenerator {
     let provider: CardGenerationProvider
     let cards: [DeckCard]
 
-    func generateCards(for sections: [BookSection]) async throws -> [DeckCard] {
+    func generateCards(for request: CardGenerationRequest) async throws -> CardGenerationResult {
         await owner.record(provider)
-        return cards
+        return CardGenerationResult(bookBrief: .fixture, cards: cards)
     }
 }
 
@@ -352,13 +503,15 @@ private actor ManuallyCompletingCardGenerator: CardGenerator {
         self.cards = cards
     }
 
-    func generateCards(for sections: [BookSection]) async throws -> [DeckCard] {
+    func generateCards(for request: CardGenerationRequest) async throws -> CardGenerationResult {
         startContinuations.forEach { $0.resume() }
         startContinuations = []
 
-        return await withCheckedContinuation { continuation in
+        let generatedCards = await withCheckedContinuation { continuation in
             generationContinuation = continuation
         }
+
+        return CardGenerationResult(bookBrief: .fixture, cards: generatedCards)
     }
 
     func waitForGenerationToStart() async {
@@ -374,5 +527,35 @@ private actor ManuallyCompletingCardGenerator: CardGenerator {
     func finish() {
         generationContinuation?.resume(returning: cards)
         generationContinuation = nil
+    }
+}
+
+private actor ResultCardGenerator: CardGenerator {
+    private let result: CardGenerationResult
+
+    init(result: CardGenerationResult) {
+        self.result = result
+    }
+
+    func generateCards(for request: CardGenerationRequest) async throws -> CardGenerationResult {
+        result
+    }
+}
+
+private actor RecordingRequestGenerator: CardGenerator {
+    private let result: CardGenerationResult
+    private var request: CardGenerationRequest?
+
+    init(result: CardGenerationResult) {
+        self.result = result
+    }
+
+    func generateCards(for request: CardGenerationRequest) async throws -> CardGenerationResult {
+        self.request = request
+        return result
+    }
+
+    func recordedRequest() -> CardGenerationRequest? {
+        request
     }
 }

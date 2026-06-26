@@ -2,6 +2,58 @@ import XCTest
 @testable import EchoDeckBuilder
 
 final class FixtureCardGeneratorTests: XCTestCase {
+    func testGeneratorReturnsStructuredResultWithDefaultBrief() async throws {
+        let anchor = try XCTUnwrap(SourceAnchor(suffix: "s2-b3"))
+        let section = BookSection(
+            spineIndex: 2,
+            blockIndex: 3,
+            heading: "Prompts",
+            text: "Context and constraints guide the model.",
+            anchor: anchor
+        )
+        let request = CardGenerationRequest(
+            sections: [section],
+            acceptedCards: [],
+            settings: GenerationSettings(provider: .fixture)
+        )
+
+        let result = try await FixtureCardGenerator().generateCards(for: request)
+
+        XCTAssertEqual(result.cards.count, 1)
+        XCTAssertEqual(result.cards[0].sourceAnchor.suffix, "s2-b3")
+        XCTAssertEqual(result.bookBrief.summary, "Fixture generator created deterministic local draft cards.")
+        XCTAssertEqual(result.warnings, [])
+    }
+
+    func testDeckCardCanCarryOptionalVisualMetadata() throws {
+        let anchor = try XCTUnwrap(SourceAnchor(suffix: "s1-b1"))
+        let section = BookSection(
+            spineIndex: 1,
+            blockIndex: 1,
+            heading: "Memory",
+            text: "Visual metaphors help recall.",
+            anchor: anchor
+        )
+        let visual = CardVisual(
+            priority: .high,
+            imagePrompt: "A lighthouse illuminating linked cards.",
+            altText: "A lighthouse beam reveals connected study cards."
+        )
+
+        let card = DeckCard(
+            sectionID: section.id,
+            frontText: "Why use visuals?",
+            backText: "They make important points easier to remember.",
+            kind: .basic,
+            sourceAnchor: anchor,
+            visual: visual
+        )
+
+        XCTAssertEqual(card.visual?.priority, .high)
+        XCTAssertEqual(card.visual?.imagePrompt, "A lighthouse illuminating linked cards.")
+        XCTAssertEqual(card.visual?.altText, "A lighthouse beam reveals connected study cards.")
+    }
+
     func testGeneratorCreatesOneDraftCardPerSectionAndPreservesAnchor() async throws {
         let anchor = try XCTUnwrap(SourceAnchor(suffix: "s2-b3"))
         let section = BookSection(

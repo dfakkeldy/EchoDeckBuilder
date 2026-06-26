@@ -5,7 +5,9 @@ final class CardGenerationProviderTests: XCTestCase {
     func testProviderDisplayNamesAreStable() {
         XCTAssertEqual(CardGenerationProvider.fixture.displayName, "Fixture")
         XCTAssertEqual(CardGenerationProvider.foundationModels.displayName, "Foundation Models")
-        XCTAssertEqual(CardGenerationProvider.allCases, [.fixture, .foundationModels])
+        XCTAssertEqual(CardGenerationProvider.claudeCLI.displayName, "Claude CLI")
+        XCTAssertEqual(CardGenerationProvider.codexCLI.displayName, "Codex CLI")
+        XCTAssertEqual(CardGenerationProvider.allCases, [.fixture, .foundationModels, .claudeCLI, .codexCLI])
     }
 
     func testAvailabilityFactoriesPreserveMessages() {
@@ -69,7 +71,7 @@ final class CardGenerationProviderTests: XCTestCase {
 private struct StaticCardGenerator: CardGenerator {
     let cards: [DeckCard]
 
-    func generateCards(for sections: [BookSection]) async throws -> [DeckCard] {
-        cards
+    func generateCards(for request: CardGenerationRequest) async throws -> CardGenerationResult {
+        CardGenerationResult(bookBrief: .fixture, cards: cards)
     }
 }

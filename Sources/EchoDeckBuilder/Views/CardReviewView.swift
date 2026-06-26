@@ -5,7 +5,7 @@ struct CardReviewView: View {
 
     var body: some View {
         Group {
-            if let cardID = store.selectedCardID, store.card(id: cardID) != nil {
+            if let cardID = store.selectedCardID, let card = store.card(id: cardID) {
                 Form {
                     TextField(
                         "Front",
@@ -28,6 +28,14 @@ struct CardReviewView: View {
                         }
                     }
 
+                    if card.kind == .cloze {
+                        TextField(
+                            "Cloze",
+                            text: optionalTextBinding(cardID: cardID, keyPath: \.clozeText),
+                            axis: .vertical
+                        )
+                    }
+
                     HStack {
                         Button {
                             store.accept(cardID: cardID)
@@ -39,6 +47,24 @@ struct CardReviewView: View {
                             store.reject(cardID: cardID)
                         } label: {
                             Label("Reject", systemImage: "xmark.circle")
+                        }
+                    }
+
+                    if let visual = card.visual {
+                        Section("Visual") {
+                            LabeledContent("Priority", value: visual.priority.rawValue.capitalized)
+
+                            TextField(
+                                "Image prompt",
+                                text: visualBinding(cardID: cardID, keyPath: \.imagePrompt),
+                                axis: .vertical
+                            )
+
+                            TextField(
+                                "Alt text",
+                                text: visualBinding(cardID: cardID, keyPath: \.altText),
+                                axis: .vertical
+                            )
                         }
                     }
                 }
@@ -65,6 +91,32 @@ struct CardReviewView: View {
             get: { store.card(id: cardID)?.kind ?? .basic },
             set: { newValue in
                 store.update(cardID: cardID) { $0.kind = newValue }
+            }
+        )
+    }
+
+    private func optionalTextBinding(cardID: DeckCard.ID, keyPath: WritableKeyPath<DeckCard, String?>) -> Binding<String> {
+        Binding(
+            get: { store.card(id: cardID)?[keyPath: keyPath] ?? "" },
+            set: { newValue in
+                store.update(cardID: cardID) { card in
+                    let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+                    card[keyPath: keyPath] = trimmed.isEmpty ? nil : newValue
+                }
+            }
+        )
+    }
+
+    private func visualBinding(cardID: DeckCard.ID, keyPath: WritableKeyPath<CardVisual, String>) -> Binding<String> {
+        Binding(
+            get: { store.card(id: cardID)?.visual?[keyPath: keyPath] ?? "" },
+            set: { newValue in
+                store.update(cardID: cardID) { card in
+                    guard card.visual != nil else {
+                        return
+                    }
+                    card.visual?[keyPath: keyPath] = newValue
+                }
             }
         )
     }

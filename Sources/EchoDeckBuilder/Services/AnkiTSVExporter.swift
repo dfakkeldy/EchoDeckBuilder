@@ -8,7 +8,7 @@ public struct AnkiTSVExporter: Sendable {
             .filter { $0.reviewState == .accepted }
             .map { card in
                 [
-                    sanitize(card.frontText),
+                    sanitize(frontText(for: card)),
                     sanitize(card.backText),
                     card.tags.map(normalizeTag).joined(separator: " "),
                     card.sourceAnchor.suffix
@@ -26,6 +26,14 @@ public struct AnkiTSVExporter: Sendable {
         value
             .replacingOccurrences(of: "\t", with: " ")
             .replacingOccurrences(of: "\n", with: "<br>")
+    }
+
+    private func frontText(for card: DeckCard) -> String {
+        if card.kind == .cloze, let clozeText = card.clozeText, !clozeText.isEmpty {
+            return clozeText
+        }
+
+        return card.frontText
     }
 
     private func normalizeTag(_ value: String) -> String {

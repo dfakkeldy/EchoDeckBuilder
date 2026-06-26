@@ -11,7 +11,23 @@ public struct FoundationModelCardGenerator: CardGenerator {
         self.maximumSectionCharacters = maximumSectionCharacters
     }
 
-    public func generateCards(for sections: [BookSection]) async throws -> [DeckCard] {
+    public func generateCards(for request: CardGenerationRequest) async throws -> CardGenerationResult {
+        let cards = try await generateCards(for: request.sections)
+
+        return CardGenerationResult(
+            runMetadata: request.runMetadata,
+            bookBrief: BookBrief(
+                summary: "Foundation Models generated draft cards from selected source sections.",
+                themes: ["on-device generation"],
+                keyConcepts: ["source anchors", "local language model"],
+                argumentFlow: ["select source sections", "generate draft cards", "review into deck"],
+                skipAreas: []
+            ),
+            cards: cards
+        )
+    }
+
+    private func generateCards(for sections: [BookSection]) async throws -> [DeckCard] {
         let availability = FoundationModelAvailability.current()
         guard availability.isAvailable else {
             throw CardGenerationError.unavailable(availability.message)

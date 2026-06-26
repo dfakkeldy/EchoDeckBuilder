@@ -14,6 +14,10 @@ public struct DefaultCardGeneratorResolver: CardGeneratorResolving {
             return .available("Fixture generator ready")
         case .foundationModels:
             return FoundationModelAvailability.current()
+        case .claudeCLI:
+            return .available("Claude CLI ready")
+        case .codexCLI:
+            return .available("Codex CLI ready")
         }
     }
 
@@ -34,6 +38,10 @@ public struct DefaultCardGeneratorResolver: CardGeneratorResolving {
             #endif
 
             return UnavailableCardGenerator(message: availability.message)
+        case .claudeCLI:
+            return LocalClaudeCLIGenerator()
+        case .codexCLI:
+            return LocalCodexCLIGenerator()
         }
     }
 }
@@ -78,7 +86,7 @@ public struct UnavailableCardGenerator: CardGenerator {
         self.message = message
     }
 
-    public func generateCards(for sections: [BookSection]) async throws -> [DeckCard] {
+    public func generateCards(for request: CardGenerationRequest) async throws -> CardGenerationResult {
         throw CardGenerationError.unavailable(message)
     }
 }

@@ -1,8 +1,10 @@
 import Foundation
 
-public enum CardGenerationProvider: String, CaseIterable, Identifiable, Sendable {
+public enum CardGenerationProvider: String, Codable, CaseIterable, Identifiable, Sendable {
     case fixture
     case foundationModels
+    case claudeCLI
+    case codexCLI
 
     public var id: String {
         rawValue
@@ -14,6 +16,10 @@ public enum CardGenerationProvider: String, CaseIterable, Identifiable, Sendable
             return "Fixture"
         case .foundationModels:
             return "Foundation Models"
+        case .claudeCLI:
+            return "Claude CLI"
+        case .codexCLI:
+            return "Codex CLI"
         }
     }
 }
