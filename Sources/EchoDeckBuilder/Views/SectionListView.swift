@@ -11,7 +11,7 @@ struct SectionListView: View {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(card.frontText)
                                 .lineLimit(2)
-                            Text(card.sourceAnchor.suffix)
+                            Text(card.sourceAnchor?.suffix ?? "Missing anchor")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }

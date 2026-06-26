@@ -18,7 +18,7 @@ public struct DeckCard: Codable, Hashable, Identifiable, Sendable {
     public var backText: String
     public var kind: CardKind
     public var tags: [String]
-    public var sourceAnchor: SourceAnchor
+    public var sourceAnchor: SourceAnchor?
     public var reviewState: CardReviewState
 
     public init(
@@ -28,7 +28,7 @@ public struct DeckCard: Codable, Hashable, Identifiable, Sendable {
         backText: String,
         kind: CardKind,
         tags: [String] = [],
-        sourceAnchor: SourceAnchor,
+        sourceAnchor: SourceAnchor? = nil,
         reviewState: CardReviewState = .draft
     ) {
         self.id = id

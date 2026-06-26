@@ -17,7 +17,7 @@ final class FixtureCardGeneratorTests: XCTestCase {
 
         XCTAssertEqual(cards.count, 1)
         XCTAssertEqual(cards[0].sectionID, section.id)
-        XCTAssertEqual(cards[0].sourceAnchor.suffix, "s2-b3")
+        XCTAssertEqual(cards[0].sourceAnchor?.suffix, "s2-b3")
         XCTAssertEqual(cards[0].reviewState, .draft)
         XCTAssertTrue(cards[0].backText.contains("context"))
         XCTAssertTrue(cards[0].backText.contains("constraints"))

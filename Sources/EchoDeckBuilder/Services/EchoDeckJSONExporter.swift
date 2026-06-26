@@ -5,13 +5,14 @@ public struct EchoDeckJSONExporter: Sendable {
 
     public func summary(for cards: [DeckCard]) -> EchoDeckExportSummary {
         let acceptedCards = cards.filter { $0.reviewState == .accepted }
+        let sourceAnchoredCards = acceptedCards.filter { $0.sourceAnchor != nil }
         return EchoDeckExportSummary(
             totalCards: cards.count,
             acceptedCount: acceptedCards.count,
             draftCount: cards.filter { $0.reviewState == .draft }.count,
             rejectedCount: cards.filter { $0.reviewState == .rejected }.count,
             exportedCount: acceptedCards.count,
-            sourceAnchoredCount: acceptedCards.count
+            sourceAnchoredCount: sourceAnchoredCards.count
         )
     }
 
@@ -23,7 +24,7 @@ public struct EchoDeckJSONExporter: Sendable {
                     frontText: card.frontText,
                     backText: card.backText,
                     triggerTiming: "manualOnly",
-                    sourceAnchor: card.sourceAnchor.suffix
+                    sourceAnchor: card.sourceAnchor?.suffix ?? ""
                 )
             }
 

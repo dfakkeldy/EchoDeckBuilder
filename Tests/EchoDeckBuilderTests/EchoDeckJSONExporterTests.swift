@@ -81,14 +81,22 @@ final class EchoDeckJSONExporterTests: XCTestCase {
             sourceAnchor: anchor2,
             reviewState: .rejected
         )
+        let acceptedWithoutAnchor = DeckCard(
+            sectionID: UUID(),
+            frontText: "Accepted without anchor",
+            backText: "Still exported",
+            kind: .basic,
+            sourceAnchor: nil,
+            reviewState: .accepted
+        )
 
-        let summary = EchoDeckJSONExporter().summary(for: [accepted, draft, rejected])
+        let summary = EchoDeckJSONExporter().summary(for: [accepted, draft, rejected, acceptedWithoutAnchor])
 
-        XCTAssertEqual(summary.totalCards, 3)
-        XCTAssertEqual(summary.acceptedCount, 1)
+        XCTAssertEqual(summary.totalCards, 4)
+        XCTAssertEqual(summary.acceptedCount, 2)
         XCTAssertEqual(summary.draftCount, 1)
         XCTAssertEqual(summary.rejectedCount, 1)
-        XCTAssertEqual(summary.exportedCount, 1)
+        XCTAssertEqual(summary.exportedCount, 2)
         XCTAssertEqual(summary.sourceAnchoredCount, 1)
     }
 }
