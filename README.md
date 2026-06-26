@@ -6,7 +6,7 @@ Local-first app idea for turning an EPUB into an Echo-ready study deck.
 
 Echo already has a strong reader model: imported EPUB content becomes `epub_block` rows, and some internal study-plan cards can point at those rows through `flashcard.source_block_id`.
 
-The missing product gap is external deck creation. Echo's current JSON and APKG importers need a source-anchor-aware path so imported cards can resolve back to EPUB blocks instead of arriving unanchored.
+The missing product gap is external deck creation. Echo's import path can now resolve source-anchored JSON and APKG cards back to EPUB blocks, so this app's job is to generate and export those anchored decks cleanly.
 
 ## Goal
 
@@ -38,7 +38,7 @@ Reasoning:
 - Deck generation is an authoring workflow: import EPUB, chunk text, choose AI settings, review/edit cards, inspect anchors, dedupe, tag, and export.
 - Echo should stay focused on reading, listening, reviewing, and showing anchored cards in context.
 - A separate app can experiment with model providers, privacy controls, Anki export, and diagnostics without destabilizing Echo.
-- Echo still needs one focused integration: import Echo deck JSON vNext and resolve source anchors into `flashcard.source_block_id`.
+- Echo now has the focused integration this app needs: it imports Echo deck JSON vNext and resolves source anchors into `flashcard.source_block_id`.
 
 Likely end state:
 
@@ -77,7 +77,7 @@ From the Echo repo inspection:
 - `EchoCore/Services/DeckImportService.swift` resolves `sourceAnchor` against `deck.targetMediaID` before insert.
 - `EchoCore/Services/ApkgImportService.swift` reads optional Echo anchor metadata for APKG imports.
 
-Conclusion: Echo supports EPUB-anchored cards internally, but the external deck import format needs a vNext schema before this app can produce a fully Echo-ready import.
+Conclusion: Echo supports EPUB-anchored cards internally and now has the anchor-first import path this app targets for fully Echo-ready exports.
 
 ## Echo Source Anchor Import Contract
 
