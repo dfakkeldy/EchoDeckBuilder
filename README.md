@@ -157,6 +157,7 @@ Local-first privacy rules:
 
 - EPUB extraction happens locally.
 - The user explicitly chooses any AI provider.
+- The current MVP generator is deterministic and local; real AI provider selection is intentionally out of scope for this first build.
 - The app sends only selected chunks, not the entire book by default.
 - Generated cards should paraphrase source material and avoid long quotations.
 - Private copyrighted material must never be uploaded, shared, or bundled into examples.
@@ -172,3 +173,23 @@ Good first milestones:
 5. Mac SwiftUI shell around the pipeline.
 
 Avoid third-party dependencies until the first pipeline works with standard library tools and Echo's existing patterns.
+
+## Build And Run
+
+Run tests:
+
+```bash
+swift test
+```
+
+Build and launch the macOS app:
+
+```bash
+./script/build_and_run.sh
+```
+
+Verify launch:
+
+```bash
+./script/build_and_run.sh --verify
+```
