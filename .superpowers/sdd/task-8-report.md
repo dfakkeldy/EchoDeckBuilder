@@ -14,7 +14,7 @@ Verification:
 - `./script/build_and_run.sh --verify` — passed.
 
 Commit SHA:
-- f2bcff6
+- 98e0c13
 
 Concerns:
 - None.

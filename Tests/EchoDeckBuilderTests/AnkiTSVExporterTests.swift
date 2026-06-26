@@ -56,6 +56,6 @@ final class AnkiTSVExporterTests: XCTestCase {
 
         XCTAssertEqual(output, "Front text\tBack text\ttag_one\ts2-b5\n")
         XCTAssertFalse(output.contains("A red fox in winter woods"))
-        XCTAssertFalse(output.contains("high"))
+        XCTAssertFalse(output.contains("medium"))
     }
 }
