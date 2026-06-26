@@ -8,7 +8,7 @@ public struct CompositeCardGenerator: CardGenerator {
     public init(
         fixture: any CardGenerator = FixtureCardGenerator(),
         claudeCLI: any CardGenerator = LocalClaudeCLIGenerator(),
-        codexCLI: (any CardGenerator)? = nil
+        codexCLI: (any CardGenerator)? = LocalCodexCLIGenerator()
     ) {
         self.fixture = fixture
         self.claudeCLI = claudeCLI
