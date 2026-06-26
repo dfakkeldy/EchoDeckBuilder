@@ -11,9 +11,12 @@ public final class LibraryStore {
     public var deckName: String
     public var targetMediaID: String
     public var statusMessage: String
+    public var generationSettings: GenerationSettings
     public var isInspectorPresented: Bool
     public private(set) var isGeneratingCards: Bool
     public private(set) var isImportingEPUB: Bool
+    public private(set) var latestBookBrief: BookBrief?
+    public private(set) var generationWarnings: [GenerationWarning]
 
     private let generator: any CardGenerator
     @ObservationIgnored private var generationTask: Task<Void, Never>?
@@ -23,7 +26,7 @@ public final class LibraryStore {
     public init(
         sections: [BookSection] = [],
         cards: [DeckCard] = [],
-        generator: any CardGenerator = FixtureCardGenerator()
+        generator: any CardGenerator = CompositeCardGenerator()
     ) {
         self.sections = sections
         self.cards = cards
@@ -32,9 +35,12 @@ public final class LibraryStore {
         self.deckName = "Untitled Deck"
         self.targetMediaID = ""
         self.statusMessage = "Ready"
+        self.generationSettings = GenerationSettings()
         self.isInspectorPresented = true
         self.isGeneratingCards = false
         self.isImportingEPUB = false
+        self.latestBookBrief = nil
+        self.generationWarnings = []
         self.generator = generator
 
         if let firstCardID = cards.first?.id {
@@ -129,6 +135,8 @@ public final class LibraryStore {
 
             sections = importedBook.sections
             cards = []
+            latestBookBrief = nil
+            generationWarnings = []
             selectSection(sections.first?.id)
             deckName = importedBook.deckName
             statusMessage = "Imported \(sections.count) anchored sections"
@@ -171,6 +179,8 @@ public final class LibraryStore {
 
         let generator = self.generator
         let sections = self.sections
+        let acceptedCards = self.cards.filter { $0.reviewState == .accepted }
+        let settings = self.generationSettings
         let preferredSectionID = selectedSectionID ?? sections.first?.id
         let token = UUID()
 
@@ -178,10 +188,14 @@ public final class LibraryStore {
         isGeneratingCards = true
         statusMessage = "Generating draft cards..."
 
-        generationTask = Task { [weak self, generator, sections, preferredSectionID, token] in
+        generationTask = Task { [weak self, generator, sections, acceptedCards, settings, preferredSectionID, token] in
             await self?.runGeneration(
                 using: generator,
-                sections: sections,
+                request: CardGenerationRequest(
+                    sections: sections,
+                    acceptedCards: acceptedCards,
+                    settings: settings
+                ),
                 preferredSectionID: preferredSectionID,
                 token: token
             )
@@ -207,13 +221,13 @@ public final class LibraryStore {
 
     private func runGeneration(
         using generator: any CardGenerator,
-        sections: [BookSection],
+        request: CardGenerationRequest,
         preferredSectionID: BookSection.ID?,
         token: UUID
     ) async {
         do {
-            let generatedCards = try await generator.generateCards(for: sections)
-            finishGeneration(with: generatedCards, preferredSectionID: preferredSectionID, token: token)
+            let result = try await generator.generateCards(for: request)
+            finishGeneration(with: result, preferredSectionID: preferredSectionID, token: token)
         } catch {
             guard !Task.isCancelled else {
                 cancelGeneration(token: token)
@@ -225,7 +239,7 @@ public final class LibraryStore {
     }
 
     private func finishGeneration(
-        with generatedCards: [DeckCard],
+        with result: CardGenerationResult,
         preferredSectionID: BookSection.ID?,
         token: UUID
     ) {
@@ -233,15 +247,24 @@ public final class LibraryStore {
             return
         }
 
-        cards = generatedCards
+        let acceptedCards = cards.filter { $0.reviewState == .accepted }
+        let draftCards = result.cards.map { card -> DeckCard in
+            var draft = card
+            draft.reviewState = .draft
+            return draft
+        }
+
+        cards = acceptedCards + draftCards
+        latestBookBrief = result.bookBrief
+        generationWarnings = result.warnings
         generationTask = nil
         generationToken = nil
         isGeneratingCards = false
-        statusMessage = "Generated \(generatedCards.count) draft cards"
+        statusMessage = "Generated \(draftCards.count) draft cards"
 
         if let preferredSectionID {
             selectSection(preferredSectionID)
-        } else if let firstCardID = generatedCards.first?.id {
+        } else if let firstCardID = draftCards.first?.id ?? acceptedCards.first?.id {
             selectCard(firstCardID)
         } else {
             selectSection(sections.first?.id)

@@ -134,6 +134,93 @@ final class LibraryStoreTests: XCTestCase {
         XCTAssertEqual(store.selectedCardID, generatedCard.id)
     }
 
+    func testRegenerationPreservesAcceptedCardsAndReplacesDrafts() async throws {
+        let fixture = try makeFixture()
+        var accepted = fixture.card
+        accepted.reviewState = .accepted
+        let oldDraft = DeckCard(
+            sectionID: fixture.section.id,
+            frontText: "Old draft",
+            backText: "Old draft back",
+            kind: .basic,
+            sourceAnchor: fixture.section.anchor
+        )
+        let newDraft = DeckCard(
+            sectionID: fixture.section.id,
+            frontText: "New draft",
+            backText: "New draft back",
+            kind: .basic,
+            sourceAnchor: fixture.section.anchor
+        )
+        let generator = ResultCardGenerator(result: CardGenerationResult(bookBrief: .fixture, cards: [newDraft]))
+        let store = LibraryStore(sections: [fixture.section], cards: [accepted, oldDraft], generator: generator)
+
+        store.generateCardsForSelectedBook()
+        try await Task.sleep(nanoseconds: 25_000_000)
+
+        XCTAssertTrue(store.cards.contains { $0.id == accepted.id && $0.reviewState == .accepted })
+        XCTAssertFalse(store.cards.contains { $0.id == oldDraft.id })
+        XCTAssertTrue(store.cards.contains { $0.frontText == "New draft" && $0.reviewState == .draft })
+    }
+
+    func testGenerationRequestIncludesAcceptedCardsAndSettings() async throws {
+        let fixture = try makeFixture()
+        var accepted = fixture.card
+        accepted.reviewState = .accepted
+        let generator = RecordingRequestGenerator(result: CardGenerationResult(bookBrief: .fixture, cards: []))
+        let store = LibraryStore(sections: [fixture.section], cards: [accepted], generator: generator)
+        store.generationSettings.provider = .claudeCLI
+        store.generationSettings.imageMode = .prompts
+
+        store.generateCardsForSelectedBook()
+        try await Task.sleep(nanoseconds: 25_000_000)
+        let recordedRequest = await generator.recordedRequest()
+        let request = try XCTUnwrap(recordedRequest)
+
+        XCTAssertEqual(request.acceptedCards.map(\.id), [accepted.id])
+        XCTAssertEqual(request.settings.provider, .claudeCLI)
+        XCTAssertEqual(request.settings.imageMode, .prompts)
+    }
+
+    func testGenerationStoresLatestBriefAndWarnings() async throws {
+        let fixture = try makeFixture()
+        let result = CardGenerationResult(
+            bookBrief: BookBrief(summary: "Fresh brief", themes: ["theme"]),
+            cards: [],
+            warnings: [GenerationWarning(message: "Batch warning")]
+        )
+        let store = LibraryStore(sections: [fixture.section], generator: ResultCardGenerator(result: result))
+
+        store.generateCardsForSelectedBook()
+        try await Task.sleep(nanoseconds: 25_000_000)
+
+        XCTAssertEqual(store.latestBookBrief?.summary, "Fresh brief")
+        XCTAssertEqual(store.generationWarnings.map(\.message), ["Batch warning"])
+    }
+
+    func testImportClearsLatestBriefAndWarnings() async throws {
+        let fixture = try makeFixture()
+        let result = CardGenerationResult(
+            bookBrief: BookBrief(summary: "Fresh brief", themes: ["theme"]),
+            cards: [],
+            warnings: [GenerationWarning(message: "Batch warning")]
+        )
+        let store = LibraryStore(sections: [fixture.section], generator: ResultCardGenerator(result: result))
+        let epubFixture = try TestEPUBFixture.make()
+        defer { epubFixture.cleanup() }
+
+        store.generateCardsForSelectedBook()
+        try await Task.sleep(nanoseconds: 25_000_000)
+
+        XCTAssertNotNil(store.latestBookBrief)
+        XCTAssertFalse(store.generationWarnings.isEmpty)
+
+        await store.importEPUB(at: epubFixture.epubURL)
+
+        XCTAssertNil(store.latestBookBrief)
+        XCTAssertEqual(store.generationWarnings, [])
+    }
+
     func testImportInvalidatesStaleGenerationCompletion() async throws {
         let fixture = try makeFixture()
         let staleCard = DeckCard(
@@ -239,5 +326,35 @@ private actor ManuallyCompletingCardGenerator: CardGenerator {
     func finish() {
         generationContinuation?.resume(returning: cards)
         generationContinuation = nil
+    }
+}
+
+private actor ResultCardGenerator: CardGenerator {
+    private let result: CardGenerationResult
+
+    init(result: CardGenerationResult) {
+        self.result = result
+    }
+
+    func generateCards(for request: CardGenerationRequest) async throws -> CardGenerationResult {
+        result
+    }
+}
+
+private actor RecordingRequestGenerator: CardGenerator {
+    private let result: CardGenerationResult
+    private var request: CardGenerationRequest?
+
+    init(result: CardGenerationResult) {
+        self.result = result
+    }
+
+    func generateCards(for request: CardGenerationRequest) async throws -> CardGenerationResult {
+        self.request = request
+        return result
+    }
+
+    func recordedRequest() -> CardGenerationRequest? {
+        request
     }
 }
