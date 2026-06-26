@@ -2,6 +2,32 @@ import XCTest
 @testable import EchoDeckBuilder
 
 final class LocalProcessRunnerTests: XCTestCase {
+    func testRunCancelsLongRunningProcessPromptly() async throws {
+        let runner = LocalProcessRunner()
+        let startedAt = Date()
+
+        let task = Task {
+            try await runner.run(ProcessInvocation(
+                executable: "/bin/sh",
+                arguments: ["-c", "trap '' TERM; while :; do :; done"],
+                standardInput: "",
+                timeoutSeconds: 30
+            ))
+        }
+
+        try await Task.sleep(for: .milliseconds(200))
+        task.cancel()
+
+        do {
+            _ = try await task.value
+            XCTFail("Expected cancellation.")
+        } catch is CancellationError {
+            XCTAssertLessThan(Date().timeIntervalSince(startedAt), 2.0)
+        } catch {
+            XCTFail("Expected CancellationError, got \(error).")
+        }
+    }
+
     func testRunTimesOutForLongRunningProcess() async throws {
         let runner = LocalProcessRunner()
         let startedAt = Date()
