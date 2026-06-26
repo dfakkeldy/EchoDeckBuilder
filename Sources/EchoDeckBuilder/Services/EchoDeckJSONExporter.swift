@@ -10,8 +10,6 @@ public struct EchoDeckJSONExporter: Sendable {
                 EchoDeckCardDocument(
                     frontText: card.frontText,
                     backText: card.backText,
-                    startTime: 0,
-                    endTime: 0,
                     triggerTiming: "manualOnly",
                     sourceAnchor: card.sourceAnchor.suffix
                 )

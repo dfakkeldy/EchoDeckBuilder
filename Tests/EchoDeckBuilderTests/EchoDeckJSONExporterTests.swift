@@ -26,6 +26,9 @@ final class EchoDeckJSONExporterTests: XCTestCase {
         XCTAssertEqual(object["deckName"] as? String, "Chapter 4 Review")
         XCTAssertEqual(object["targetMediaID"] as? String, "file:///Books/Example")
         XCTAssertEqual(cards.first?["sourceAnchor"] as? String, "s4-b12")
+        XCTAssertEqual(cards.first?["triggerTiming"] as? String, "manualOnly")
+        XCTAssertNil(cards.first?["startTime"])
+        XCTAssertNil(cards.first?["endTime"])
         XCTAssertNil(cards.first?["source"])
         XCTAssertNil(cards.first?["echoBlockID"])
     }
