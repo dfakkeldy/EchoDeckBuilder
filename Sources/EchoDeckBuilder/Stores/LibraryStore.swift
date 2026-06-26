@@ -12,18 +12,33 @@ public final class LibraryStore {
     public var targetMediaID: String
     public var statusMessage: String
     public var isInspectorPresented: Bool
+    public var selectedGenerationProvider: CardGenerationProvider
     public private(set) var isGeneratingCards: Bool
     public private(set) var isImportingEPUB: Bool
 
-    private let generator: any CardGenerator
+    private let generatorResolver: any CardGeneratorResolving
     @ObservationIgnored private var generationTask: Task<Void, Never>?
     @ObservationIgnored private var generationToken: UUID?
     @ObservationIgnored private var importToken: UUID?
 
-    public init(
+    public convenience init(
         sections: [BookSection] = [],
         cards: [DeckCard] = [],
         generator: any CardGenerator = FixtureCardGenerator()
+    ) {
+        self.init(
+            sections: sections,
+            cards: cards,
+            selectedGenerationProvider: .fixture,
+            generatorResolver: FixedCardGeneratorResolver(generator: generator)
+        )
+    }
+
+    public init(
+        sections: [BookSection] = [],
+        cards: [DeckCard] = [],
+        selectedGenerationProvider: CardGenerationProvider = .fixture,
+        generatorResolver: any CardGeneratorResolving
     ) {
         self.sections = sections
         self.cards = cards
@@ -33,9 +48,10 @@ public final class LibraryStore {
         self.targetMediaID = ""
         self.statusMessage = "Ready"
         self.isInspectorPresented = true
+        self.selectedGenerationProvider = selectedGenerationProvider
         self.isGeneratingCards = false
         self.isImportingEPUB = false
-        self.generator = generator
+        self.generatorResolver = generatorResolver
 
         if let firstCardID = cards.first?.id {
             selectCard(firstCardID)
@@ -64,8 +80,12 @@ public final class LibraryStore {
         return card
     }
 
+    public var generationAvailability: CardGenerationAvailability {
+        generatorResolver.availability(for: selectedGenerationProvider)
+    }
+
     public var canGenerateCards: Bool {
-        !sections.isEmpty && !isGeneratingCards && !isImportingEPUB
+        !sections.isEmpty && !isGeneratingCards && !isImportingEPUB && generationAvailability.isAvailable
     }
 
     public var canExportEchoDeck: Bool {
@@ -169,7 +189,13 @@ public final class LibraryStore {
             return
         }
 
-        let generator = self.generator
+        let availability = generationAvailability
+        guard availability.isAvailable else {
+            statusMessage = availability.message
+            return
+        }
+
+        let generator = generatorResolver.generator(for: selectedGenerationProvider)
         let sections = self.sections
         let preferredSectionID = selectedSectionID ?? sections.first?.id
         let token = UUID()

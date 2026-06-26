@@ -161,6 +161,51 @@ final class LibraryStoreTests: XCTestCase {
         XCTAssertFalse(store.isGeneratingCards)
     }
 
+    func testUnavailableSelectedProviderDisablesGenerationAndReportsAvailability() throws {
+        let fixture = try makeFixture()
+        let store = LibraryStore(
+            sections: [fixture.section],
+            selectedGenerationProvider: .foundationModels,
+            generatorResolver: UnavailableFoundationModelResolver()
+        )
+
+        XCTAssertFalse(store.canGenerateCards)
+        XCTAssertEqual(store.generationAvailability.message, "Foundation Models requires macOS 26+")
+
+        store.generateCardsForSelectedBook()
+
+        XCTAssertEqual(store.statusMessage, "Foundation Models requires macOS 26+")
+        XCTAssertFalse(store.isGeneratingCards)
+        XCTAssertEqual(store.cards, [])
+    }
+
+    func testSelectedProviderUsesResolverGenerator() async throws {
+        let fixture = try makeFixture()
+        let generatedCard = DeckCard(
+            sectionID: fixture.section.id,
+            frontText: "Foundation front",
+            backText: "Foundation back",
+            kind: .basic,
+            tags: ["generated", "foundation-models"],
+            sourceAnchor: fixture.section.anchor
+        )
+        let resolver = ProviderRecordingResolver(cards: [generatedCard])
+        let store = LibraryStore(
+            sections: [fixture.section],
+            selectedGenerationProvider: .foundationModels,
+            generatorResolver: resolver
+        )
+
+        store.generateCardsForSelectedBook()
+
+        try await Task.sleep(for: .milliseconds(25))
+        let requestedProviders = await resolver.requestedProviders()
+
+        XCTAssertEqual(requestedProviders, [.foundationModels])
+        XCTAssertEqual(store.cards, [generatedCard])
+        XCTAssertEqual(store.statusMessage, "Generated 1 draft cards")
+    }
+
     private func makeFixture(
         heading: String = "Intro",
         suffix: String = "s1-b1",
@@ -203,6 +248,57 @@ private actor CountingCardGenerator: CardGenerator {
 
     func recordedCallCount() -> Int {
         callCount
+    }
+}
+
+private struct UnavailableFoundationModelResolver: CardGeneratorResolving {
+    func availability(for provider: CardGenerationProvider) -> CardGenerationAvailability {
+        switch provider {
+        case .fixture:
+            return .available("Fixture generator ready")
+        case .foundationModels:
+            return .unavailable("Foundation Models requires macOS 26+")
+        }
+    }
+
+    func generator(for provider: CardGenerationProvider) -> any CardGenerator {
+        FixtureCardGenerator()
+    }
+}
+
+private actor ProviderRecordingResolver: CardGeneratorResolving {
+    private let cards: [DeckCard]
+    private var providers: [CardGenerationProvider] = []
+
+    init(cards: [DeckCard]) {
+        self.cards = cards
+    }
+
+    nonisolated func availability(for provider: CardGenerationProvider) -> CardGenerationAvailability {
+        .available("\(provider.displayName) ready")
+    }
+
+    nonisolated func generator(for provider: CardGenerationProvider) -> any CardGenerator {
+        RecordingGenerator(owner: self, provider: provider, cards: cards)
+    }
+
+    func record(_ provider: CardGenerationProvider) {
+        providers.append(provider)
+    }
+
+    func requestedProviders() -> [CardGenerationProvider] {
+        providers
+    }
+}
+
+private struct RecordingGenerator: CardGenerator {
+    let owner: ProviderRecordingResolver
+    let provider: CardGenerationProvider
+    let cards: [DeckCard]
+
+    func generateCards(for sections: [BookSection]) async throws -> [DeckCard] {
+        await owner.record(provider)
+        return cards
     }
 }
 
