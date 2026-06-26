@@ -21,6 +21,10 @@ public struct AIPromptPackageBuilder: Sendable {
         \(request.sections.map { "\($0.anchor.suffix) \($0.heading)" }.joined(separator: "\n"))
         </source-outline>
 
+        <representative-source-text>
+        \(request.sections.map(sourceSample).joined(separator: "\n\n"))
+        </representative-source-text>
+
         <accepted-cards-to-avoid-duplicating>
         \(acceptedCardSummary(request.acceptedCards))
         </accepted-cards-to-avoid-duplicating>
@@ -30,7 +34,14 @@ public struct AIPromptPackageBuilder: Sendable {
     }
 
     public func batchPrompt(for request: CardGenerationRequest, bookBrief: BookBrief, batch: [BookSection]) -> String {
-        """
+        let visualInstructions = switch request.settings.imageMode {
+        case .prompts:
+            "When imageMode is prompts, include `visual` metadata only for high-value cards where a strong image prompt would help memorability."
+        case .off:
+            "When imageMode is off, do not provide image prompts. Set `visual` to null or omit it."
+        }
+
+        return """
         You are creating reviewable, source-anchored flashcard candidates for EchoDeckBuilder.
         Use only source anchors from this batch.
         Paraphrase. Do not copy long source quotations.
@@ -57,6 +68,10 @@ public struct AIPromptPackageBuilder: Sendable {
         <accepted-cards-to-avoid-duplicating>
         \(acceptedCardSummary(request.acceptedCards))
         </accepted-cards-to-avoid-duplicating>
+
+        <visual-instructions>
+        \(visualInstructions)
+        </visual-instructions>
 
         <batch-source>
         \(batch.map(sourceBlock).joined(separator: "\n\n"))
@@ -139,6 +154,20 @@ public struct AIPromptPackageBuilder: Sendable {
         guard !cards.isEmpty else {
             return "None"
         }
-        return cards.map { "- \($0.sourceAnchor.suffix): \($0.frontText)" }.joined(separator: "\n")
+        let acceptedCards = cards.filter { $0.reviewState == .accepted }
+        guard !acceptedCards.isEmpty else {
+            return "None"
+        }
+
+        return acceptedCards.map { "- \($0.sourceAnchor.suffix): \($0.frontText)" }.joined(separator: "\n")
+    }
+
+    private func sourceSample(_ section: BookSection) -> String {
+        """
+        <source-sample anchor=\"\(section.anchor.suffix)\">
+        Heading: \(section.heading)
+        Text: \(section.text)
+        </source-sample>
+        """
     }
 }

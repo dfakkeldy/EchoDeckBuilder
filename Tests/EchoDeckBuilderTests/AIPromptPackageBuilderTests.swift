@@ -2,7 +2,7 @@ import XCTest
 @testable import EchoDeckBuilder
 
 final class AIPromptPackageBuilderTests: XCTestCase {
-    func testBookBriefPromptIncludesHeadingsSettingsAndAcceptedCards() throws {
+    func testBookBriefPromptIncludesHeadingsSettingsAcceptedCardsAndRepresentativeSourceText() throws {
         let section = try makeSection(suffix: "s1-b1", heading: "Anchors", text: "Anchors connect memory to source.")
         let accepted = DeckCard(
             sectionID: section.id,
@@ -24,7 +24,71 @@ final class AIPromptPackageBuilderTests: XCTestCase {
         XCTAssertTrue(prompt.contains("Image mode: prompts"))
         XCTAssertTrue(prompt.contains("s1-b1 Anchors"))
         XCTAssertTrue(prompt.contains("Accepted front"))
+        XCTAssertTrue(prompt.contains("<representative-source-text>"))
+        XCTAssertTrue(prompt.contains("Anchors connect memory to source."))
         XCTAssertTrue(prompt.contains("<source-outline>"))
+        XCTAssertTrue(prompt.contains("<source-sample anchor=\"s1-b1\">"))
+        XCTAssertTrue(prompt.contains("Heading: Anchors"))
+    }
+
+    func testBookBriefPromptFiltersAcceptedCardsInSummary() throws {
+        let section = try makeSection(suffix: "s1-b1", heading: "Anchors", text: "Anchors connect memory to source.")
+        let accepted = DeckCard(
+            sectionID: section.id,
+            frontText: "Accepted front",
+            backText: "Accepted back",
+            kind: .basic,
+            sourceAnchor: section.anchor,
+            reviewState: .accepted
+        )
+        let rejected = DeckCard(
+            sectionID: section.id,
+            frontText: "Rejected front",
+            backText: "Rejected back",
+            kind: .basic,
+            sourceAnchor: section.anchor,
+            reviewState: .rejected
+        )
+        let request = CardGenerationRequest(
+            sections: [section],
+            acceptedCards: [accepted, rejected],
+            settings: GenerationSettings(provider: .claudeCLI, imageMode: .prompts)
+        )
+
+        let prompt = AIPromptPackageBuilder().bookBriefPrompt(for: request)
+
+        XCTAssertTrue(prompt.contains("Accepted front"))
+        XCTAssertFalse(prompt.contains("Rejected front"))
+    }
+
+    func testBatchPromptIncludesVisualInstructionsForPromptMode() throws {
+        let section = try makeSection(suffix: "s2-b4", heading: "Context", text: "Context prevents shallow cards.")
+        let request = CardGenerationRequest(
+            sections: [section],
+            settings: GenerationSettings(provider: .claudeCLI, imageMode: .prompts)
+        )
+        let brief = BookBrief(summary: "Big picture", themes: ["context"], keyConcepts: ["batching"], argumentFlow: [], skipAreas: [])
+
+        let prompt = AIPromptPackageBuilder().batchPrompt(for: request, bookBrief: brief, batch: [section])
+
+        XCTAssertTrue(prompt.contains("<visual-instructions>"))
+        XCTAssertTrue(prompt.contains("When imageMode is prompts, include `visual` metadata only for high-value cards where a strong image prompt would help memorability."))
+        XCTAssertFalse(prompt.contains("When imageMode is off"))
+    }
+
+    func testBatchPromptSetsVisualToNullOrOmitsWhenImageModeOff() throws {
+        let section = try makeSection(suffix: "s2-b4", heading: "Context", text: "Context prevents shallow cards.")
+        let request = CardGenerationRequest(
+            sections: [section],
+            settings: GenerationSettings(provider: .claudeCLI, imageMode: .off)
+        )
+        let brief = BookBrief(summary: "Big picture", themes: ["context"], keyConcepts: ["batching"], argumentFlow: [], skipAreas: [])
+
+        let prompt = AIPromptPackageBuilder().batchPrompt(for: request, bookBrief: brief, batch: [section])
+
+        XCTAssertTrue(prompt.contains("<visual-instructions>"))
+        XCTAssertTrue(prompt.contains("When imageMode is off, do not provide image prompts. Set `visual` to null or omit it."))
+        XCTAssertFalse(prompt.contains("only for high-value cards"))
     }
 
     func testBatchPromptDelimitsSourceBlocksAndRequiresInBatchAnchors() throws {
