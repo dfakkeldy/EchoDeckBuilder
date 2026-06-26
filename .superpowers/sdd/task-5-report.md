@@ -22,4 +22,4 @@
 - Tests run and results:
   - `swift test --filter LibraryStoreTests` (14 passed)
   - `swift test` (60 passed)
-- Commit SHA: Pending.
+- Commit SHA: `bc3b1f7`
