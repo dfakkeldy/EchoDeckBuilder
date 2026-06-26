@@ -1358,6 +1358,7 @@ public protocol ProcessRunning: Sendable {
 public enum LocalProcessRunnerError: Error, LocalizedError, Sendable {
     case nonZeroExit(Int32, String)
     case invalidOutputEncoding
+    case timedOut(TimeInterval)
 
     public var errorDescription: String? {
         switch self {
@@ -1365,6 +1366,8 @@ public enum LocalProcessRunnerError: Error, LocalizedError, Sendable {
             "Process exited with status \(status): \(stderr)"
         case .invalidOutputEncoding:
             "Process output was not valid UTF-8."
+        case .timedOut(let timeoutSeconds):
+            "Process timed out after \(timeoutSeconds) seconds."
         }
     }
 }
@@ -1391,7 +1394,16 @@ public struct LocalProcessRunner: ProcessRunning {
                 inputPipe.fileHandleForWriting.write(inputData)
             }
             inputPipe.fileHandleForWriting.closeFile()
-            process.waitUntilExit()
+
+            let deadline = Date.now.addingTimeInterval(invocation.timeoutSeconds)
+            while process.isRunning {
+                if Date.now >= deadline {
+                    process.terminate()
+                    process.waitUntilExit()
+                    throw LocalProcessRunnerError.timedOut(invocation.timeoutSeconds)
+                }
+                Thread.sleep(forTimeInterval: 0.05)
+            }
 
             let stdoutData = outputPipe.fileHandleForReading.readDataToEndOfFile()
             let stderrData = errorPipe.fileHandleForReading.readDataToEndOfFile()
