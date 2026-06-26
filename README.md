@@ -6,7 +6,7 @@ Local-first app idea for turning an EPUB into an Echo-ready study deck.
 
 Echo already has a strong reader model: imported EPUB content becomes `epub_block` rows, and some internal study-plan cards can point at those rows through `flashcard.source_block_id`.
 
-The missing product gap is external deck creation. Echo's current JSON deck importer is timestamp-based: it imports `startTime` and `endTime`, then inserts cards with `sourceBlockID: nil`. APKG import also creates cards without EPUB block anchors. So an external deck can be imported today, but it is not fully Echo-ready unless Echo gets an import path that accepts and resolves EPUB block anchors.
+The missing product gap is external deck creation. Echo's current JSON and APKG importers need a source-anchor-aware path so imported cards can resolve back to EPUB blocks instead of arriving unanchored.
 
 ## Goal
 
@@ -73,9 +73,9 @@ From the Echo repo inspection:
 - `Shared/Database/Schema_V1.swift` creates `flashcard.source_block_id`.
 - `EchoCore/ViewModels/ReaderFeedViewModel.swift` prefers `sourceBlockID` when placing card extras in the reader feed.
 - `Shared/Database/DAOs/StudyPlanDAO.swift` creates internal study-plan cards with `sourceBlockID`.
-- `EchoCore/Models/FlashcardDeckImport.swift` only defines `startTime` and `endTime` for imported cards.
-- `EchoCore/Services/DeckImportService.swift` currently inserts imported JSON cards with `sourceBlockID: nil`.
-- `EchoCore/Services/ApkgImportService.swift` also imports APKG cards with `sourceBlockID: nil`.
+- `EchoCore/Models/FlashcardDeckImport.swift` accepts optional source anchors and optional timestamps for imported cards.
+- `EchoCore/Services/DeckImportService.swift` resolves `sourceAnchor` against `deck.targetMediaID` before insert.
+- `EchoCore/Services/ApkgImportService.swift` reads optional Echo anchor metadata for APKG imports.
 
 Conclusion: Echo supports EPUB-anchored cards internally, but the external deck import format needs a vNext schema before this app can produce a fully Echo-ready import.
 
@@ -99,8 +99,6 @@ Example Echo deck JSON vNext:
     {
       "frontText": "What is the core purpose of a strategic anchor?",
       "backText": "It gives you a clear decision rule for choosing work that advances your goal.",
-      "startTime": 0,
-      "endTime": 0,
       "triggerTiming": "manualOnly",
       "sourceAnchor": "s4-b12"
     }
@@ -129,13 +127,14 @@ Example Echo-aware APKG sidecar at archive root, named `echo-import.json`:
 
 Echo-side import behavior this app depends on:
 
-1. `FlashcardDeckImport.ImportedCard` accepts optional `sourceAnchor`.
+1. `FlashcardDeckImport.ImportedCard` accepts optional `sourceAnchor`, `startTime`, and `endTime`.
 2. `DeckImportService` resolves `sourceAnchor` against `deck.targetMediaID`.
-3. `ApkgImportService` reads optional `echo-import.json` and maps entries by Anki `cardID`, then `noteGUID`.
-4. A shared `EPUBSourceAnchorResolver` accepts canonical suffixes like `s4-b12`, accepts legacy full IDs by stripping to the suffix, rebuilds the local `epub-\(targetMediaID)-\(suffix)` ID, and validates both `id` and `audiobook_id`.
-5. Bad, malformed, unresolved, or wrong-book anchors are warnings, not fatal errors. The card still imports with `sourceBlockID: nil` and uses existing timestamp/manual fallback placement.
-6. `FlashcardDAO.syncToTimeline` writes `TimelineItem.epubBlockID` for anchored imported cards.
-7. Existing JSON and APKG decks keep importing unchanged.
+3. A JSON card with a resolved `sourceAnchor` does not need `startTime` or `endTime`; Echo stores a schema-compatible `mediaTimestamp` placeholder and keeps `endTimestamp` nil.
+4. A source-only JSON card whose anchor cannot resolve fails validation instead of importing without a placement anchor.
+5. `.apkg` import reads optional `echo-import.json` and maps entries by Anki `cardID`, then `noteGUID`.
+6. A shared `EPUBSourceAnchorResolver` accepts canonical suffixes like `s4-b12`, accepts legacy full IDs by stripping to the suffix, rebuilds the local `epub-\(targetMediaID)-\(suffix)` ID, and validates both `id` and `audiobook_id`.
+7. `FlashcardDAO.syncToTimeline` writes `TimelineItem.epubBlockID` for anchored imported cards.
+8. Existing timestamped JSON and APKG decks keep importing unchanged.
 
 Out of scope for this vNext contract:
 
