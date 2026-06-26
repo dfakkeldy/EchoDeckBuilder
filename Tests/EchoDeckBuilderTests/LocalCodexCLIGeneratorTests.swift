@@ -48,6 +48,7 @@ final class LocalCodexCLIGeneratorTests: XCTestCase {
 
         let invocations = await runner.recordedInvocations()
         XCTAssertEqual(invocations.count, 3)
+        XCTAssertEqual(invocations[0].executable, "/usr/bin/env")
         XCTAssertEqual(Array(invocations[0].arguments.prefix(2)), ["codex", "exec"])
         XCTAssertTrue(invocations[0].arguments.contains("--ephemeral"))
         XCTAssertTrue(invocations[0].arguments.contains("--sandbox"))
@@ -63,6 +64,8 @@ final class LocalCodexCLIGeneratorTests: XCTestCase {
         let schemaSnapshots = await runner.recordedSchemaSnapshots()
         XCTAssertEqual(schemaSnapshots.count, 3)
         let schemaPath = try XCTUnwrap(schemaSnapshots.first?.path)
+        let outputSchemaIndex = try XCTUnwrap(invocations[0].arguments.firstIndex(of: "--output-schema"))
+        XCTAssertEqual(invocations[0].arguments[outputSchemaIndex + 1], schemaPath)
         XCTAssertTrue(schemaSnapshots.allSatisfy { $0.path == schemaPath })
         XCTAssertTrue(schemaSnapshots.allSatisfy(\.fileExistsDuringRun))
         XCTAssertTrue(schemaSnapshots.allSatisfy { $0.contents.contains("\"bookBrief\"") })
@@ -75,6 +78,31 @@ final class LocalCodexCLIGeneratorTests: XCTestCase {
         XCTAssertEqual(result.cards.map(\.frontText), ["Front 1", "Front 2"])
         XCTAssertEqual(result.cards.map(\.sourceAnchor.suffix), ["s1-b1", "s1-b2"])
         XCTAssertEqual(result.warnings.map(\.message), ["brief warning", "batch 1 warning", "batch 2 warning"])
+    }
+
+    func testCodexGeneratorCleansTemporaryDirectoryWhenSchemaDataThrows() async throws {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appending(path: "EchoDeckBuilder-CodexCLITests-\(UUID().uuidString)", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: temporaryDirectory) }
+        let generator = LocalCodexCLIGenerator(
+            processRunner: RecordingCodexProcessRunner(outputs: []),
+            temporaryDirectory: temporaryDirectory,
+            outputSchemaData: { throw SchemaDataFailure() }
+        )
+
+        do {
+            _ = try await generator.generateCards(for: CardGenerationRequest(sections: []))
+            XCTFail("Expected schema data failure.")
+        } catch is SchemaDataFailure {
+            let remainingItems = try FileManager.default.contentsOfDirectory(
+                at: temporaryDirectory,
+                includingPropertiesForKeys: nil
+            )
+            XCTAssertEqual(remainingItems, [])
+        } catch {
+            XCTFail("Expected SchemaDataFailure, got \(error).")
+        }
     }
 
     private func makeSection(
@@ -111,6 +139,8 @@ final class LocalCodexCLIGeneratorTests: XCTestCase {
         return ProcessResult(standardOutput: String(decoding: data, as: UTF8.self), standardError: "", terminationStatus: 0)
     }
 }
+
+private struct SchemaDataFailure: Error {}
 
 private struct SchemaSnapshot: Sendable {
     let path: String

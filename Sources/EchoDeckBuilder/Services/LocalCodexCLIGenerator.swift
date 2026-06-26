@@ -6,6 +6,7 @@ public struct LocalCodexCLIGenerator: CardGenerator {
     private let batcher: GenerationBatcher
     private let validator: AIModelOutputValidator
     private let temporaryDirectory: URL
+    private let outputSchemaData: @Sendable () throws -> Data
 
     public init(
         processRunner: any ProcessRunning = LocalProcessRunner(),
@@ -14,11 +15,30 @@ public struct LocalCodexCLIGenerator: CardGenerator {
         validator: AIModelOutputValidator = AIModelOutputValidator(),
         temporaryDirectory: URL = FileManager.default.temporaryDirectory
     ) {
+        self.init(
+            processRunner: processRunner,
+            promptBuilder: promptBuilder,
+            batcher: batcher,
+            validator: validator,
+            temporaryDirectory: temporaryDirectory,
+            outputSchemaData: { try promptBuilder.outputSchemaData() }
+        )
+    }
+
+    init(
+        processRunner: any ProcessRunning = LocalProcessRunner(),
+        promptBuilder: AIPromptPackageBuilder = AIPromptPackageBuilder(),
+        batcher: GenerationBatcher = GenerationBatcher(),
+        validator: AIModelOutputValidator = AIModelOutputValidator(),
+        temporaryDirectory: URL = FileManager.default.temporaryDirectory,
+        outputSchemaData: @escaping @Sendable () throws -> Data
+    ) {
         self.processRunner = processRunner
         self.promptBuilder = promptBuilder
         self.batcher = batcher
         self.validator = validator
         self.temporaryDirectory = temporaryDirectory
+        self.outputSchemaData = outputSchemaData
     }
 
     public func generateCards(for request: CardGenerationRequest) async throws -> CardGenerationResult {
@@ -49,11 +69,15 @@ public struct LocalCodexCLIGenerator: CardGenerator {
     private func writeSchemaFile() throws -> URL {
         let schemaDirectory = temporaryDirectory
             .appending(path: "EchoDeckBuilder-CodexCLI-\(UUID().uuidString)", directoryHint: .isDirectory)
-        try FileManager.default.createDirectory(at: schemaDirectory, withIntermediateDirectories: true)
-
-        let schemaFileURL = schemaDirectory.appending(path: "output-schema.json")
-        try promptBuilder.outputSchemaData().write(to: schemaFileURL, options: .atomic)
-        return schemaFileURL
+        do {
+            try FileManager.default.createDirectory(at: schemaDirectory, withIntermediateDirectories: true)
+            let schemaFileURL = schemaDirectory.appending(path: "output-schema.json")
+            try outputSchemaData().write(to: schemaFileURL, options: .atomic)
+            return schemaFileURL
+        } catch {
+            try? FileManager.default.removeItem(at: schemaDirectory)
+            throw error
+        }
     }
 
     private func runCodex(prompt: String, schemaFileURL: URL) async throws -> AIModelOutput {
