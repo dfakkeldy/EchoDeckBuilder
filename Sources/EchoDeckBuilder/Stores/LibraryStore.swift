@@ -262,28 +262,30 @@ public final class LibraryStore {
         isGeneratingCards = false
         statusMessage = "Generated \(draftCards.count) draft cards"
 
-        if let selectedCardID = preferredSelection(
+        if let selectedCardID = preferredDraftSelection(
             preferredSectionID: preferredSectionID,
-            draftCards: draftCards,
-            acceptedCards: acceptedCards
+            draftCards: draftCards
         ) {
             selectCard(selectedCardID)
+        } else if let preferredSectionID {
+            selectSection(preferredSectionID)
+        } else if let firstCardID = draftCards.first?.id ?? acceptedCards.first?.id {
+            selectCard(firstCardID)
         } else {
-            selectSection(preferredSectionID ?? sections.first?.id)
+            selectSection(sections.first?.id)
         }
     }
 
-    private func preferredSelection(
+    private func preferredDraftSelection(
         preferredSectionID: BookSection.ID?,
-        draftCards: [DeckCard],
-        acceptedCards: [DeckCard]
+        draftCards: [DeckCard]
     ) -> DeckCard.ID? {
         if let preferredSectionID,
            let firstDraftInPreferredSection = draftCards.first(where: { $0.sectionID == preferredSectionID }) {
             return firstDraftInPreferredSection.id
         }
 
-        return draftCards.first?.id ?? acceptedCards.first?.id
+        return preferredSectionID == nil ? draftCards.first?.id : nil
     }
 
     private func failGeneration(_ error: any Error, token: UUID) {

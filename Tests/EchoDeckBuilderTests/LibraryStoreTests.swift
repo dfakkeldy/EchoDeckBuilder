@@ -173,6 +173,33 @@ final class LibraryStoreTests: XCTestCase {
         XCTAssertEqual(store.selectedCardID, newDraft.id)
     }
 
+    func testRegenerationStaysOnPreferredSectionWhenNoFreshDraftExistsThere() async throws {
+        let preferred = try makeFixture(heading: "Preferred", suffix: "s1-b1", text: "Preferred text")
+        let other = try makeFixture(heading: "Other", suffix: "s1-b2", text: "Other text")
+        var accepted = preferred.card
+        accepted.reviewState = .accepted
+        let otherDraft = DeckCard(
+            sectionID: other.section.id,
+            frontText: "Other draft",
+            backText: "Other draft back",
+            kind: .basic,
+            sourceAnchor: other.section.anchor
+        )
+        let generator = ResultCardGenerator(result: CardGenerationResult(bookBrief: .fixture, cards: [otherDraft]))
+        let store = LibraryStore(
+            sections: [preferred.section, other.section],
+            cards: [accepted],
+            generator: generator
+        )
+        store.selectSection(preferred.section.id)
+
+        store.generateCardsForSelectedBook()
+        try await Task.sleep(nanoseconds: 25_000_000)
+
+        XCTAssertEqual(store.selectedSectionID, preferred.section.id)
+        XCTAssertEqual(store.selectedCardID, accepted.id)
+    }
+
     func testGenerationRequestIncludesAcceptedCardsAndSettings() async throws {
         let fixture = try makeFixture()
         var accepted = fixture.card

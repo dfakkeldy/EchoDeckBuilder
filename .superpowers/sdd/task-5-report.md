@@ -15,3 +15,11 @@
   - `swift test --filter LibraryStoreTests` (13 passed)
   - `swift test` (59 passed)
 - Commit SHA: `21c1ae9`
+
+## Second Review Fix
+
+- Summary: Refined the selection fallback so regeneration remains on the preferred section when that section receives no fresh draft, instead of jumping to an unrelated section's draft. Added a two-section regression test for that case.
+- Tests run and results:
+  - `swift test --filter LibraryStoreTests` (14 passed)
+  - `swift test` (60 passed)
+- Commit SHA: Pending.
