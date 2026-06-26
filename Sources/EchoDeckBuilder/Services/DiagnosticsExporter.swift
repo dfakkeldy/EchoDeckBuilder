@@ -4,6 +4,7 @@ public struct DiagnosticsExporter: Sendable {
     public init() {}
 
     public func export(sections: [BookSection], cards: [DeckCard]) -> String {
+        let summary = EchoDeckJSONExporter().summary(for: cards)
         let accepted = cards.filter { $0.reviewState == .accepted }.count
         let rejected = cards.filter { $0.reviewState == .rejected }.count
         let draft = cards.filter { $0.reviewState == .draft }.count
@@ -16,6 +17,8 @@ public struct DiagnosticsExporter: Sendable {
         Accepted: \(accepted)
         Draft: \(draft)
         Rejected: \(rejected)
+        Exported: \(summary.exportedCount)
+        Source Anchored: \(summary.sourceAnchoredCount)
 
         Anchors:
         \(anchors)

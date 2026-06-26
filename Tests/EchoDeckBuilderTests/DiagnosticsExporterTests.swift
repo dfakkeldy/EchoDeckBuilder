@@ -12,6 +12,8 @@ final class DiagnosticsExporterTests: XCTestCase {
         XCTAssertTrue(report.contains("Sections: 1"))
         XCTAssertTrue(report.contains("Cards: 1"))
         XCTAssertTrue(report.contains("Accepted: 1"))
+        XCTAssertTrue(report.contains("Exported: 1"))
+        XCTAssertTrue(report.contains("Source Anchored: 1"))
         XCTAssertTrue(report.contains("s1-b1"))
     }
 }

@@ -53,4 +53,42 @@ final class EchoDeckJSONExporterTests: XCTestCase {
         let cards = try XCTUnwrap(object["cards"] as? [[String: Any]])
         XCTAssertEqual(cards.count, 0)
     }
+
+    func testExportSummaryCountsReviewStatesAndAnchors() throws {
+        let anchor1 = try XCTUnwrap(SourceAnchor(suffix: "s1-b1"))
+        let anchor2 = try XCTUnwrap(SourceAnchor(suffix: "s1-b2"))
+        let accepted = DeckCard(
+            sectionID: UUID(),
+            frontText: "Accepted",
+            backText: "Exported",
+            kind: .basic,
+            sourceAnchor: anchor1,
+            reviewState: .accepted
+        )
+        let draft = DeckCard(
+            sectionID: UUID(),
+            frontText: "Draft",
+            backText: "Not exported",
+            kind: .basic,
+            sourceAnchor: anchor2,
+            reviewState: .draft
+        )
+        let rejected = DeckCard(
+            sectionID: UUID(),
+            frontText: "Rejected",
+            backText: "Not exported",
+            kind: .basic,
+            sourceAnchor: anchor2,
+            reviewState: .rejected
+        )
+
+        let summary = EchoDeckJSONExporter().summary(for: [accepted, draft, rejected])
+
+        XCTAssertEqual(summary.totalCards, 3)
+        XCTAssertEqual(summary.acceptedCount, 1)
+        XCTAssertEqual(summary.draftCount, 1)
+        XCTAssertEqual(summary.rejectedCount, 1)
+        XCTAssertEqual(summary.exportedCount, 1)
+        XCTAssertEqual(summary.sourceAnchoredCount, 1)
+    }
 }
