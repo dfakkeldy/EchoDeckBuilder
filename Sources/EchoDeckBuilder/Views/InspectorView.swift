@@ -11,10 +11,19 @@ struct InspectorView: View {
             }
 
             Section("Generation") {
-                Picker("Provider", selection: generationBinding(\.provider)) {
-                    ForEach(AIProvider.allCases) { provider in
+                Picker("Provider", selection: $store.selectedGenerationProvider) {
+                    ForEach(CardGenerationProvider.allCases) { provider in
                         Text(provider.displayName).tag(provider)
                     }
+                }
+
+                LabeledContent("Availability") {
+                    Text(store.generationAvailability.message)
+                        .foregroundStyle(
+                            store.generationAvailability.isAvailable
+                                ? AnyShapeStyle(.secondary)
+                                : AnyShapeStyle(.red)
+                        )
                 }
 
                 TextField("Model", text: generationBinding(\.model))

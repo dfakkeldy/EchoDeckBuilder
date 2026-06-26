@@ -4,9 +4,7 @@ public struct DiagnosticsExporter: Sendable {
     public init() {}
 
     public func export(sections: [BookSection], cards: [DeckCard]) -> String {
-        let accepted = cards.filter { $0.reviewState == .accepted }.count
-        let rejected = cards.filter { $0.reviewState == .rejected }.count
-        let draft = cards.filter { $0.reviewState == .draft }.count
+        let summary = EchoDeckJSONExporter().summary(for: cards)
         let anchors = sections.map { "\($0.anchor.suffix) \($0.heading)" }.joined(separator: "\n")
 
         let visualPrompts: [String] = cards.compactMap { card -> String? in
@@ -20,10 +18,12 @@ public struct DiagnosticsExporter: Sendable {
         return """
         EchoDeckBuilder Diagnostics
         Sections: \(sections.count)
-        Cards: \(cards.count)
-        Accepted: \(accepted)
-        Draft: \(draft)
-        Rejected: \(rejected)
+        Cards: \(summary.totalCards)
+        Accepted: \(summary.acceptedCount)
+        Draft: \(summary.draftCount)
+        Rejected: \(summary.rejectedCount)
+        Exported: \(summary.exportedCount)
+        Source Anchored: \(summary.sourceAnchoredCount)
         Visual Prompt Count: \(visualPrompts.count)
 
         Anchors:

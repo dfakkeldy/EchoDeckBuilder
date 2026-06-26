@@ -1,21 +1,5 @@
 import Foundation
 
-public enum AIProvider: String, Codable, CaseIterable, Identifiable, Sendable {
-    case fixture
-    case claudeCLI
-    case codexCLI
-
-    public var id: String { rawValue }
-
-    public var displayName: String {
-        switch self {
-        case .fixture: "Fixture"
-        case .claudeCLI: "Claude CLI"
-        case .codexCLI: "Codex CLI"
-        }
-    }
-}
-
 public enum ImageGenerationMode: String, Codable, CaseIterable, Identifiable, Sendable {
     case off
     case prompts
@@ -31,7 +15,7 @@ public enum ImageGenerationMode: String, Codable, CaseIterable, Identifiable, Se
 }
 
 public struct GenerationSettings: Codable, Hashable, Sendable {
-    public var provider: AIProvider
+    public var provider: CardGenerationProvider
     public var model: String
     public var targetCardsPerBatch: Int
     public var batchSize: Int
@@ -41,7 +25,7 @@ public struct GenerationSettings: Codable, Hashable, Sendable {
     public var imageMode: ImageGenerationMode
 
     public init(
-        provider: AIProvider = .fixture,
+        provider: CardGenerationProvider = .fixture,
         model: String = "default",
         targetCardsPerBatch: Int = 8,
         batchSize: Int = 12,

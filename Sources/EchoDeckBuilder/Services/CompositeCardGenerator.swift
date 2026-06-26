@@ -18,12 +18,20 @@ public struct CompositeCardGenerator: CardGenerator {
     public func generateCards(for request: CardGenerationRequest) async throws -> CardGenerationResult {
         switch request.settings.provider {
         case .fixture:
-            try await fixture.generateCards(for: request)
+            return try await fixture.generateCards(for: request)
+        case .foundationModels:
+            #if canImport(FoundationModels)
+            if #available(macOS 26.0, *) {
+                return try await FoundationModelCardGenerator().generateCards(for: request)
+            }
+            #endif
+
+            throw CardGenerationError.unavailable(FoundationModelAvailability.current().message)
         case .claudeCLI:
-            try await claudeCLI.generateCards(for: request)
+            return try await claudeCLI.generateCards(for: request)
         case .codexCLI:
             if let codexCLI {
-                try await codexCLI.generateCards(for: request)
+                return try await codexCLI.generateCards(for: request)
             } else {
                 throw CompositeCardGeneratorError.codexGeneratorUnavailable
             }
