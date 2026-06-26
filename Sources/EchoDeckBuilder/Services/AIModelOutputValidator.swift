@@ -180,27 +180,50 @@ private extension String {
 
     var hasValidClozeMarkers: Bool {
         var foundC1 = false
-        var searchStart = startIndex
+        var cursor = startIndex
 
-        while let openRange = range(of: "{{c", range: searchStart..<endIndex) {
-            guard self[searchStart..<openRange.lowerBound].contains("}}") == false,
-                  let closeRange = range(of: "}}", range: openRange.upperBound..<endIndex)
+        while cursor < endIndex {
+            if hasPrefix("}}", at: cursor) {
+                return false
+            }
+            guard hasPrefix("{{", at: cursor) else {
+                cursor = index(after: cursor)
+                continue
+            }
+
+            var markerCursor = index(cursor, offsetBy: 2)
+            guard markerCursor < endIndex, self[markerCursor] == "c" else {
+                return false
+            }
+            markerCursor = index(after: markerCursor)
+
+            let ordinalStart = markerCursor
+            while markerCursor < endIndex, self[markerCursor].isNumber {
+                markerCursor = index(after: markerCursor)
+            }
+            guard ordinalStart < markerCursor,
+                  let ordinal = Int(self[ordinalStart..<markerCursor]),
+                  ordinal > 0,
+                  hasPrefix("::", at: markerCursor)
             else {
                 return false
             }
 
-            let markerBody = self[openRange.upperBound..<closeRange.lowerBound]
-            guard let delimiterRange = markerBody.range(of: "::") else {
+            let contentStart = index(markerCursor, offsetBy: 2)
+            guard let closeRange = range(of: "}}", range: contentStart..<endIndex) else {
                 return false
             }
 
-            let ordinalText = markerBody[..<delimiterRange.lowerBound]
-            guard let ordinal = Int(ordinalText), ordinal > 0 else {
+            let contentAndHint = self[contentStart..<closeRange.lowerBound]
+            guard contentAndHint.contains("{{") == false,
+                  contentAndHint.contains("}}") == false
+            else {
                 return false
             }
 
-            let contentAndHint = markerBody[delimiterRange.upperBound...]
-            let content = contentAndHint.split(separator: "::", maxSplits: 1, omittingEmptySubsequences: false).first ?? ""
+            let content = contentAndHint
+                .split(separator: "::", maxSplits: 1, omittingEmptySubsequences: false)
+                .first ?? ""
             guard content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else {
                 return false
             }
@@ -208,11 +231,14 @@ private extension String {
             if ordinal == 1 {
                 foundC1 = true
             }
-            searchStart = closeRange.upperBound
+            cursor = closeRange.upperBound
         }
 
-        let remainder = self[searchStart..<endIndex]
-        return foundC1 && remainder.contains("{{") == false && remainder.contains("}}") == false
+        return foundC1
+    }
+
+    func hasPrefix(_ prefix: String, at index: Index) -> Bool {
+        range(of: prefix, range: index..<endIndex)?.lowerBound == index
     }
 }
 

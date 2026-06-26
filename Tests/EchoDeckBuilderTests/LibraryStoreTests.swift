@@ -124,7 +124,7 @@ final class LibraryStoreTests: XCTestCase {
         XCTAssertTrue(store.isGeneratingCards)
         XCTAssertEqual(store.statusMessage, "Card generation is already running")
 
-        try await Task.sleep(nanoseconds: 100_000_000)
+        try await waitForGenerationToFinish(store)
         let callCount = await generator.recordedCallCount()
 
         XCTAssertFalse(store.isGeneratingCards)

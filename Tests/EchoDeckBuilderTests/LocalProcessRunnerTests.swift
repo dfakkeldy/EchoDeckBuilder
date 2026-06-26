@@ -129,6 +129,31 @@ final class LocalProcessRunnerTests: XCTestCase {
         }
     }
 
+    func testRunCleansBackgroundChildBeforeDrainingOutput() async throws {
+        let runner = LocalProcessRunner()
+        let directory = FileManager.default.temporaryDirectory
+            .appending(path: "EchoDeckBuilder-BackgroundChild-\(UUID().uuidString)", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let childPIDFile = directory.appending(path: "child.pid")
+        let startedAt = Date()
+
+        let result = try await runner.run(ProcessInvocation(
+            executable: "/bin/sh",
+            arguments: [
+                "-c",
+                "/bin/sh -c 'trap \"\" TERM; while :; do sleep 1; done' & echo $! > '\(childPIDFile.path)'; exit 0"
+            ],
+            standardInput: "",
+            timeoutSeconds: 5
+        ))
+
+        XCTAssertLessThan(Date().timeIntervalSince(startedAt), 2.0)
+        XCTAssertEqual(result.terminationStatus, 0)
+        let childPID = try await waitForChildPID(at: childPIDFile)
+        try await assertProcessExits(childPID)
+    }
+
     func testRunCapturesLargeStdoutWithoutDeadlock() async throws {
         let runner = LocalProcessRunner()
         let chunk = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"

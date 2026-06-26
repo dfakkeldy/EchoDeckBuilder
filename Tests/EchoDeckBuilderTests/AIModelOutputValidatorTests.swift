@@ -110,7 +110,10 @@ final class AIModelOutputValidatorTests: XCTestCase {
             "{{c1::}}",
             "{{c2::not first marker}}",
             "{{c1::valid}} stray }}",
-            "{{cX::not numeric}}"
+            "{{cX::not numeric}}",
+            "stray {{ before {{c1::term}}",
+            "{{c1::term {{oops}}",
+            "{{c1::term}} trailing {{"
         ]
 
         for clozeText in invalidTexts {

@@ -206,6 +206,7 @@ private final class ProcessExecution: @unchecked Sendable {
         }
         try Task.checkCancellation()
 
+        cleanUpProcessGroupBeforeDrainingOutput()
         let stdoutData = collectedOutput(from: outputPipe, buffer: stdoutBuffer)
         let stderrData = collectedOutput(from: errorPipe, buffer: stderrBuffer)
         guard let stdout = String(data: stdoutData, encoding: .utf8),
@@ -307,7 +308,7 @@ private final class ProcessExecution: @unchecked Sendable {
     }
 
     private func terminateProcess() {
-        guard state.canTerminate else {
+        guard state.canSignalProcessGroup else {
             return
         }
 
@@ -325,6 +326,18 @@ private final class ProcessExecution: @unchecked Sendable {
         }
 
         sendSignal(SIGKILL, toProcessGroup: processIdentifier)
+    }
+
+    private func cleanUpProcessGroupBeforeDrainingOutput() {
+        let processIdentifier = currentProcessIdentifier
+        guard processIdentifier > 0 else {
+            return
+        }
+
+        sendSignal(SIGTERM, toProcessGroup: processIdentifier)
+        usleep(50_000)
+        sendSignal(SIGKILL, toProcessGroup: processIdentifier)
+        usleep(50_000)
     }
 
     private func stopMonitoringOutput() {
@@ -495,10 +508,10 @@ private final class ProcessExecutionState: @unchecked Sendable {
         return didTerminate
     }
 
-    var canTerminate: Bool {
+    var canSignalProcessGroup: Bool {
         lock.lock()
         defer { lock.unlock() }
-        return didLaunch && didTerminate == false
+        return didLaunch
     }
 
     func markLaunched() {
