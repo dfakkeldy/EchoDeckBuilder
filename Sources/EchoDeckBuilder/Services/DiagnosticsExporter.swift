@@ -9,6 +9,14 @@ public struct DiagnosticsExporter: Sendable {
         let draft = cards.filter { $0.reviewState == .draft }.count
         let anchors = sections.map { "\($0.anchor.suffix) \($0.heading)" }.joined(separator: "\n")
 
+        let visualPrompts: [String] = cards.compactMap { card -> String? in
+            guard let visual = card.visual else { return nil }
+            return "- \(card.sourceAnchor.suffix) | priority: \(visual.priority.rawValue) | prompt: \(visual.imagePrompt)"
+        }
+
+        let visualPromptLines = visualPrompts.joined(separator: "\n")
+        let visualPromptSection = visualPromptLines.isEmpty ? "None" : visualPromptLines
+
         return """
         EchoDeckBuilder Diagnostics
         Sections: \(sections.count)
@@ -16,9 +24,13 @@ public struct DiagnosticsExporter: Sendable {
         Accepted: \(accepted)
         Draft: \(draft)
         Rejected: \(rejected)
+        Visual Prompt Count: \(visualPrompts.count)
 
         Anchors:
         \(anchors)
+
+        Visual Prompt Metadata:
+        \(visualPromptSection)
         """
     }
 }
