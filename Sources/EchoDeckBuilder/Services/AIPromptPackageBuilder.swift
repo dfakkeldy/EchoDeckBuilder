@@ -10,15 +10,20 @@ public struct AIPromptPackageBuilder: Sendable {
 
         <generation-settings>
         Provider: \(request.settings.provider.rawValue)
-        Model: \(request.settings.model)
-        Audience: \(request.settings.audience)
-        Tone: \(request.settings.tone)
+        Model: \(request.settings.model.escapedForPromptXML)
+        Audience: \(request.settings.audience.escapedForPromptXML)
+        Tone: \(request.settings.tone.escapedForPromptXML)
         Image mode: \(request.settings.imageMode.rawValue)
         Target cards per batch: \(request.settings.targetCardsPerBatch)
         </generation-settings>
 
+        <request-context>
+        Source scope: \(request.sourceScope.rawValue)
+        Target media ID: \((request.targetMediaID ?? "unset").escapedForPromptXML)
+        </request-context>
+
         <source-outline>
-        \(request.sections.map { "\($0.anchor.suffix) \($0.heading)" }.joined(separator: "\n"))
+        \(request.sections.map { "\($0.anchor.suffix) \($0.heading.escapedForPromptXML)" }.joined(separator: "\n"))
         </source-outline>
 
         <representative-source-text>
@@ -50,20 +55,25 @@ public struct AIPromptPackageBuilder: Sendable {
 
         <generation-settings>
         Provider: \(request.settings.provider.rawValue)
-        Model: \(request.settings.model)
-        Audience: \(request.settings.audience)
-        Tone: \(request.settings.tone)
+        Model: \(request.settings.model.escapedForPromptXML)
+        Audience: \(request.settings.audience.escapedForPromptXML)
+        Tone: \(request.settings.tone.escapedForPromptXML)
         Image mode: \(request.settings.imageMode.rawValue)
         Target cards for this batch: \(request.settings.targetCardsPerBatch)
         Card kinds: \(request.settings.cardKinds.map(\.rawValue).joined(separator: ", "))
         </generation-settings>
 
+        <request-context>
+        Source scope: \(request.sourceScope.rawValue)
+        Target media ID: \((request.targetMediaID ?? "unset").escapedForPromptXML)
+        </request-context>
+
         <book-brief>
-        Summary: \(bookBrief.summary)
-        Themes: \(bookBrief.themes.joined(separator: ", "))
-        Key concepts: \(bookBrief.keyConcepts.joined(separator: ", "))
-        Argument flow: \(bookBrief.argumentFlow.joined(separator: " -> "))
-        Skip areas: \(bookBrief.skipAreas.joined(separator: ", "))
+        Summary: \(bookBrief.summary.escapedForPromptXML)
+        Themes: \(bookBrief.themes.map(\.escapedForPromptXML).joined(separator: ", "))
+        Key concepts: \(bookBrief.keyConcepts.map(\.escapedForPromptXML).joined(separator: ", "))
+        Argument flow: \(bookBrief.argumentFlow.map(\.escapedForPromptXML).joined(separator: " -> "))
+        Skip areas: \(bookBrief.skipAreas.map(\.escapedForPromptXML).joined(separator: ", "))
         </book-brief>
 
         <accepted-cards-to-avoid-duplicating>
@@ -144,9 +154,9 @@ public struct AIPromptPackageBuilder: Sendable {
     private func sourceBlock(_ section: BookSection) -> String {
         """
         <source-block anchor="\(section.anchor.suffix)">
-        Heading: \(section.heading)
+        Heading: \(section.heading.escapedForPromptXML)
         Text:
-        \(section.text)
+        \(section.text.escapedForPromptXML)
         </source-block>
         """
     }
@@ -160,16 +170,34 @@ public struct AIPromptPackageBuilder: Sendable {
             return "None"
         }
 
-        return acceptedCards.map { "- \($0.sourceAnchor.suffix): \($0.frontText)" }.joined(separator: "\n")
+        return acceptedCards.map { card in
+            let prompt = acceptedCardPromptText(card)
+                .truncatedForPromptSample(maxCharacters: 240)
+                .escapedForPromptXML
+            let answer = card.backText
+                .truncatedForPromptSample(maxCharacters: 240)
+                .escapedForPromptXML
+            return "- \(card.sourceAnchor.suffix) [\(card.kind.rawValue)]: \(prompt) | Answer: \(answer)"
+        }.joined(separator: "\n")
     }
 
     private func sourceSample(_ section: BookSection) -> String {
         """
         <source-sample anchor=\"\(section.anchor.suffix)\">
-        Heading: \(section.heading)
-        Text: \(section.text.truncatedForPromptSample(maxCharacters: 700))
+        Heading: \(section.heading.escapedForPromptXML)
+        Text: \(section.text.truncatedForPromptSample(maxCharacters: 700).escapedForPromptXML)
         </source-sample>
         """
+    }
+
+    private func acceptedCardPromptText(_ card: DeckCard) -> String {
+        if card.kind == .cloze,
+           let clozeText = card.clozeText?.trimmingCharacters(in: .whitespacesAndNewlines),
+           clozeText.isEmpty == false {
+            return clozeText
+        }
+
+        return card.frontText
     }
 
     private func representativeSections(from sections: [BookSection]) -> [BookSection] {
@@ -192,6 +220,15 @@ public struct AIPromptPackageBuilder: Sendable {
 }
 
 private extension String {
+    var escapedForPromptXML: String {
+        var escaped = replacingOccurrences(of: "&", with: "&amp;")
+        escaped = escaped.replacingOccurrences(of: "<", with: "&lt;")
+        escaped = escaped.replacingOccurrences(of: ">", with: "&gt;")
+        escaped = escaped.replacingOccurrences(of: "\"", with: "&quot;")
+        escaped = escaped.replacingOccurrences(of: "'", with: "&apos;")
+        return escaped
+    }
+
     func truncatedForPromptSample(maxCharacters: Int) -> String {
         guard count > maxCharacters else {
             return self

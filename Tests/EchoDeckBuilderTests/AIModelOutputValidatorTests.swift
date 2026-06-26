@@ -58,6 +58,21 @@ final class AIModelOutputValidatorTests: XCTestCase {
         XCTAssertEqual(result.cards[0].clozeText, "A strategic anchor gives {{c1::a decision rule}} for choosing work.")
     }
 
+    func testRunMetadataOverrideUsesRequestOwnedValues() throws {
+        let section = try makeSection(suffix: "s1-b1")
+        let output = AIModelOutput.validFixture(sourceAnchor: "s1-b1")
+        let metadata = GenerationRunMetadata(
+            provider: "codexCLI",
+            model: "gpt-5",
+            sourceScope: "selected-book",
+            imageMode: "prompts"
+        )
+
+        let result = try AIModelOutputValidator().validate(output, batchSections: [section], runMetadata: metadata)
+
+        XCTAssertEqual(result.runMetadata, metadata)
+    }
+
     func testRejectsOutOfBatchAnchor() throws {
         let section = try makeSection(suffix: "s1-b1")
         let output = AIModelOutput.validFixture(sourceAnchor: "s1-b2")
@@ -85,6 +100,41 @@ final class AIModelOutputValidatorTests: XCTestCase {
 
         XCTAssertThrowsError(try AIModelOutputValidator().validate(output, batchSections: [section])) { error in
             XCTAssertEqual(error as? AIModelOutputValidationError, .invalidClozeText("s1-b1"))
+        }
+    }
+
+    func testRejectsMalformedClozeMarkers() throws {
+        let section = try makeSection(suffix: "s1-b1")
+        let invalidTexts = [
+            "{{c1::missing close",
+            "{{c1::}}",
+            "{{c2::not first marker}}",
+            "{{c1::valid}} stray }}",
+            "{{cX::not numeric}}"
+        ]
+
+        for clozeText in invalidTexts {
+            var output = AIModelOutput.validFixture(sourceAnchor: "s1-b1")
+            output.cards[0].kind = "cloze"
+            output.cards[0].clozeText = clozeText
+
+            XCTAssertThrowsError(try AIModelOutputValidator().validate(output, batchSections: [section])) { error in
+                XCTAssertEqual(error as? AIModelOutputValidationError, .invalidClozeText("s1-b1"))
+            }
+        }
+    }
+
+    func testRejectsInvalidVisualPriority() throws {
+        let section = try makeSection(suffix: "s1-b1")
+        var output = AIModelOutput.validFixture(sourceAnchor: "s1-b1")
+        output.cards[0].visual = .init(
+            priority: "urgent",
+            imagePrompt: "A strong image.",
+            altText: "A strong image."
+        )
+
+        XCTAssertThrowsError(try AIModelOutputValidator().validate(output, batchSections: [section])) { error in
+            XCTAssertEqual(error as? AIModelOutputValidationError, .invalidVisual("s1-b1"))
         }
     }
 

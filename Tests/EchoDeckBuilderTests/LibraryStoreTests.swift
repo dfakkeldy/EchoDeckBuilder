@@ -164,7 +164,7 @@ final class LibraryStoreTests: XCTestCase {
         let store = LibraryStore(sections: [fixture.section], cards: [accepted, oldDraft, oldRejected], generator: generator)
 
         store.generateCardsForSelectedBook()
-        try await Task.sleep(nanoseconds: 25_000_000)
+        try await waitForGenerationToFinish(store)
 
         XCTAssertTrue(store.cards.contains { $0.id == accepted.id && $0.reviewState == .accepted })
         XCTAssertFalse(store.cards.contains { $0.id == oldDraft.id })
@@ -194,7 +194,7 @@ final class LibraryStoreTests: XCTestCase {
         store.selectSection(preferred.section.id)
 
         store.generateCardsForSelectedBook()
-        try await Task.sleep(nanoseconds: 25_000_000)
+        try await waitForGenerationToFinish(store)
 
         XCTAssertEqual(store.selectedSectionID, preferred.section.id)
         XCTAssertEqual(store.selectedCardID, accepted.id)
@@ -208,15 +208,18 @@ final class LibraryStoreTests: XCTestCase {
         let store = LibraryStore(sections: [fixture.section], cards: [accepted], generator: generator)
         store.generationSettings.provider = .claudeCLI
         store.generationSettings.imageMode = .prompts
+        store.targetMediaID = "  media-123  "
 
         store.generateCardsForSelectedBook()
-        try await Task.sleep(nanoseconds: 25_000_000)
+        try await waitForGenerationToFinish(store)
         let recordedRequest = await generator.recordedRequest()
         let request = try XCTUnwrap(recordedRequest)
 
         XCTAssertEqual(request.acceptedCards.map(\.id), [accepted.id])
         XCTAssertEqual(request.settings.provider, .claudeCLI)
         XCTAssertEqual(request.settings.imageMode, .prompts)
+        XCTAssertEqual(request.sourceScope, .selectedBook)
+        XCTAssertEqual(request.targetMediaID, "media-123")
     }
 
     func testGenerationStoresLatestBriefAndWarnings() async throws {
@@ -229,7 +232,7 @@ final class LibraryStoreTests: XCTestCase {
         let store = LibraryStore(sections: [fixture.section], generator: ResultCardGenerator(result: result))
 
         store.generateCardsForSelectedBook()
-        try await Task.sleep(nanoseconds: 25_000_000)
+        try await waitForGenerationToFinish(store)
 
         XCTAssertEqual(store.latestBookBrief?.summary, "Fresh brief")
         XCTAssertEqual(store.generationWarnings.map(\.message), ["Batch warning"])
@@ -247,7 +250,7 @@ final class LibraryStoreTests: XCTestCase {
         defer { epubFixture.cleanup() }
 
         store.generateCardsForSelectedBook()
-        try await Task.sleep(nanoseconds: 25_000_000)
+        try await waitForGenerationToFinish(store)
 
         XCTAssertNotNil(store.latestBookBrief)
         XCTAssertFalse(store.generationWarnings.isEmpty)
@@ -277,7 +280,7 @@ final class LibraryStoreTests: XCTestCase {
 
         await store.importEPUB(at: epubFixture.epubURL)
         await generator.finish()
-        try await Task.sleep(nanoseconds: 25_000_000)
+        await yieldForMainActorWork()
 
         XCTAssertEqual(store.sections.count, 1)
         XCTAssertEqual(store.sections.first?.heading, "Fixture Chapter")
@@ -306,6 +309,26 @@ final class LibraryStoreTests: XCTestCase {
             sourceAnchor: anchor
         )
         return (section, card)
+    }
+
+    private func waitForGenerationToFinish(
+        _ store: LibraryStore,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) async throws {
+        for _ in 0..<100 {
+            if store.isGeneratingCards == false {
+                return
+            }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTFail("Timed out waiting for card generation to finish.", file: file, line: line)
+    }
+
+    private func yieldForMainActorWork() async {
+        for _ in 0..<5 {
+            await Task.yield()
+        }
     }
 }
 

@@ -32,7 +32,11 @@ public struct LocalClaudeCLIGenerator: CardGenerator {
             settings: request.settings,
             workingDirectory: workingDirectory
         )
-        let briefResult = try validator.validate(briefOutput, batchSections: request.sections)
+        let briefResult = try validator.validate(
+            briefOutput,
+            batchSections: request.sections,
+            runMetadata: request.runMetadata
+        )
         let bookBrief = briefResult.bookBrief
 
         var cards: [DeckCard] = []
@@ -45,7 +49,7 @@ public struct LocalClaudeCLIGenerator: CardGenerator {
                 settings: request.settings,
                 workingDirectory: workingDirectory
             )
-            let result = try validator.validate(output, batchSections: batch)
+            let result = try validator.validate(output, batchSections: batch, runMetadata: request.runMetadata)
             cards.append(contentsOf: result.cards)
             warnings.append(contentsOf: result.warnings)
         }

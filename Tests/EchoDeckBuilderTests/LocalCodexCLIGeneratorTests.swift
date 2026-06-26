@@ -83,8 +83,8 @@ final class LocalCodexCLIGeneratorTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: URL(fileURLWithPath: schemaPath).deletingLastPathComponent().path))
 
         XCTAssertEqual(result.bookBrief.summary, "Brief")
-        XCTAssertEqual(result.runMetadata?.provider, "codex-cli")
-        XCTAssertEqual(result.runMetadata?.model, "default")
+        XCTAssertEqual(result.runMetadata?.provider, "codexCLI")
+        XCTAssertEqual(result.runMetadata?.model, "gpt-5.4")
         XCTAssertEqual(result.cards.map(\.frontText), ["Front 1", "Front 2"])
         XCTAssertEqual(result.cards.map(\.sourceAnchor.suffix), ["s1-b1", "s1-b2"])
         XCTAssertEqual(result.warnings.map(\.message), ["brief warning", "batch 1 warning", "batch 2 warning"])

@@ -56,8 +56,8 @@ final class LocalClaudeCLIGeneratorTests: XCTestCase {
         }
         XCTAssertEqual(result.cards.count, 1)
         XCTAssertEqual(result.cards[0].sourceAnchor.suffix, "s1-b1")
-        XCTAssertEqual(result.runMetadata?.provider, "claude-cli")
-        XCTAssertEqual(result.runMetadata?.model, "default")
+        XCTAssertEqual(result.runMetadata?.provider, "claudeCLI")
+        XCTAssertEqual(result.runMetadata?.model, "sonnet")
     }
 
     func testCompositeGeneratorDispatchesToFixtureByDefault() async throws {

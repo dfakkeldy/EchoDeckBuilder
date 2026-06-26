@@ -181,6 +181,7 @@ public final class LibraryStore {
         let sections = self.sections
         let acceptedCards = self.cards.filter { $0.reviewState == .accepted }
         let settings = self.generationSettings
+        let targetMediaID = normalizedTargetMediaID.nilIfEmpty
         let preferredSectionID = selectedSectionID ?? sections.first?.id
         let token = UUID()
 
@@ -188,13 +189,15 @@ public final class LibraryStore {
         isGeneratingCards = true
         statusMessage = "Generating draft cards..."
 
-        generationTask = Task { [weak self, generator, sections, acceptedCards, settings, preferredSectionID, token] in
+        generationTask = Task { [weak self, generator, sections, acceptedCards, settings, targetMediaID, preferredSectionID, token] in
             await self?.runGeneration(
                 using: generator,
                 request: CardGenerationRequest(
                     sections: sections,
                     acceptedCards: acceptedCards,
-                    settings: settings
+                    settings: settings,
+                    sourceScope: .selectedBook,
+                    targetMediaID: targetMediaID
                 ),
                 preferredSectionID: preferredSectionID,
                 token: token
@@ -355,6 +358,12 @@ public final class LibraryStore {
 
     private var normalizedTargetMediaID: String {
         targetMediaID.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
+private extension String {
+    var nilIfEmpty: String? {
+        isEmpty ? nil : self
     }
 }
 

@@ -38,7 +38,11 @@ public enum AIModelOutputValidationError: Error, Equatable, LocalizedError, Send
 public struct AIModelOutputValidator: Sendable {
     public init() {}
 
-    public func validate(_ output: AIModelOutput, batchSections: [BookSection]) throws -> CardGenerationResult {
+    public func validate(
+        _ output: AIModelOutput,
+        batchSections: [BookSection],
+        runMetadata: GenerationRunMetadata? = nil
+    ) throws -> CardGenerationResult {
         let summary = output.bookBrief.summary.trimmedForGeneration
         guard !summary.isEmpty else {
             throw AIModelOutputValidationError.emptyBookBrief
@@ -66,7 +70,7 @@ public struct AIModelOutputValidator: Sendable {
             let kind = try cardKind(from: rawCard.kind, anchor: anchor.suffix)
             let clozeText = rawCard.clozeText?.trimmedForGeneration ?? ""
             if kind == .cloze {
-                guard clozeText.contains("{{c1::") else {
+                guard clozeText.hasValidClozeMarkers else {
                     throw AIModelOutputValidationError.invalidClozeText(anchor.suffix)
                 }
             }
@@ -94,7 +98,7 @@ public struct AIModelOutputValidator: Sendable {
         }
 
         return CardGenerationResult(
-            runMetadata: GenerationRunMetadata(
+            runMetadata: runMetadata ?? GenerationRunMetadata(
                 provider: output.run.provider.trimmedForGeneration,
                 model: output.run.model.trimmedForGeneration,
                 sourceScope: output.run.sourceScope.trimmedForGeneration,
@@ -125,11 +129,14 @@ public struct AIModelOutputValidator: Sendable {
         }
         let prompt = rawVisual.imagePrompt.trimmedForGeneration
         let altText = rawVisual.altText.trimmedForGeneration
-        guard !prompt.isEmpty, !altText.isEmpty else {
+        guard !prompt.isEmpty,
+              !altText.isEmpty,
+              let priority = CardVisualPriority(rawValue: rawVisual.priority.trimmedForGeneration)
+        else {
             throw AIModelOutputValidationError.invalidVisual(anchor)
         }
         return CardVisual(
-            priority: CardVisualPriority(rawValue: rawVisual.priority.trimmedForGeneration) ?? .medium,
+            priority: priority,
             imagePrompt: prompt,
             altText: altText
         )
@@ -169,6 +176,43 @@ private extension String {
         normalizedForQuoteDetection
             .split(separator: " ")
             .map(String.init)
+    }
+
+    var hasValidClozeMarkers: Bool {
+        var foundC1 = false
+        var searchStart = startIndex
+
+        while let openRange = range(of: "{{c", range: searchStart..<endIndex) {
+            guard self[searchStart..<openRange.lowerBound].contains("}}") == false,
+                  let closeRange = range(of: "}}", range: openRange.upperBound..<endIndex)
+            else {
+                return false
+            }
+
+            let markerBody = self[openRange.upperBound..<closeRange.lowerBound]
+            guard let delimiterRange = markerBody.range(of: "::") else {
+                return false
+            }
+
+            let ordinalText = markerBody[..<delimiterRange.lowerBound]
+            guard let ordinal = Int(ordinalText), ordinal > 0 else {
+                return false
+            }
+
+            let contentAndHint = markerBody[delimiterRange.upperBound...]
+            let content = contentAndHint.split(separator: "::", maxSplits: 1, omittingEmptySubsequences: false).first ?? ""
+            guard content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else {
+                return false
+            }
+
+            if ordinal == 1 {
+                foundC1 = true
+            }
+            searchStart = closeRange.upperBound
+        }
+
+        let remainder = self[searchStart..<endIndex]
+        return foundC1 && remainder.contains("{{") == false && remainder.contains("}}") == false
     }
 }
 

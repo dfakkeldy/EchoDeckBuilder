@@ -43,6 +43,7 @@ public enum LocalProcessRunnerError: Error, LocalizedError, Sendable {
     case nonZeroExit(Int32, String)
     case invalidOutputEncoding
     case timedOut(TimeInterval)
+    case failedToLaunch(String)
 
     public var errorDescription: String? {
         switch self {
@@ -52,6 +53,8 @@ public enum LocalProcessRunnerError: Error, LocalizedError, Sendable {
             "Process output was not valid UTF-8."
         case .timedOut(let timeoutSeconds):
             "Process timed out after \(timeoutSeconds) seconds."
+        case .failedToLaunch(let message):
+            "Process failed to launch: \(message)"
         }
     }
 }
@@ -150,22 +153,28 @@ private final class StandardInputPipe: @unchecked Sendable {
 
         try? pipe.fileHandleForWriting.close()
     }
+
+    func closeReadingHandle() {
+        try? pipe.fileHandleForReading.close()
+    }
 }
 
 private final class ProcessExecution: @unchecked Sendable {
     private let invocation: ProcessInvocation
-    private let process = Process()
     private let standardInputPipe: StandardInputPipe
     private let outputPipe = Pipe()
     private let errorPipe = Pipe()
     private let stdoutBuffer = LockedDataBuffer()
     private let stderrBuffer = LockedDataBuffer()
     private let state = ProcessExecutionState()
+    private let processLock = NSLock()
+    private var processIdentifier: pid_t = 0
+    private var processTerminationStatus: Int32 = 0
 
     init(invocation: ProcessInvocation) {
         self.invocation = invocation
         self.standardInputPipe = StandardInputPipe(input: invocation.standardInput)
-        configureProcess()
+        configurePipes()
     }
 
     func run() async throws -> ProcessResult {
@@ -177,7 +186,7 @@ private final class ProcessExecution: @unchecked Sendable {
 
         let deadline = ContinuousClock.now + .seconds(invocation.timeoutSeconds)
         do {
-            while process.isRunning {
+            while reapTerminatedProcess() == false {
                 try Task.checkCancellation()
                 if ContinuousClock.now >= deadline {
                     terminateProcess()
@@ -208,7 +217,7 @@ private final class ProcessExecution: @unchecked Sendable {
         let result = ProcessResult(
             standardOutput: stdout,
             standardError: stderr,
-            terminationStatus: process.terminationStatus
+            terminationStatus: currentTerminationStatus
         )
         guard result.terminationStatus == 0 else {
             throw LocalProcessRunnerError.nonZeroExit(result.terminationStatus, result.standardError)
@@ -221,14 +230,7 @@ private final class ProcessExecution: @unchecked Sendable {
         terminateProcess()
     }
 
-    private func configureProcess() {
-        process.executableURL = URL(fileURLWithPath: invocation.executable)
-        process.arguments = invocation.arguments
-        process.currentDirectoryURL = invocation.workingDirectory
-        process.standardInput = standardInputPipe.pipe
-        process.standardOutput = outputPipe
-        process.standardError = errorPipe
-
+    private func configurePipes() {
         outputPipe.fileHandleForReading.readabilityHandler = { [stdoutBuffer] handle in
             let data = handle.availableData
             guard data.isEmpty == false else {
@@ -246,14 +248,50 @@ private final class ProcessExecution: @unchecked Sendable {
             }
             stderrBuffer.append(data)
         }
-
-        process.terminationHandler = { [state] _ in
-            state.markTerminated()
-        }
     }
 
     private func launch() throws {
-        try process.run()
+        var fileActions: posix_spawn_file_actions_t?
+        var attributes: posix_spawnattr_t?
+        try checkSpawn(posix_spawn_file_actions_init(&fileActions), operation: "file actions init")
+        try checkSpawn(posix_spawnattr_init(&attributes), operation: "attributes init")
+        defer {
+            _ = posix_spawn_file_actions_destroy(&fileActions)
+            _ = posix_spawnattr_destroy(&attributes)
+        }
+
+        try configureSpawnFileActions(&fileActions)
+        try configureSpawnAttributes(&attributes)
+
+        var pid: pid_t = 0
+        var cArguments = ([invocation.executable] + invocation.arguments).map { strdup($0) }
+        defer {
+            for argument in cArguments {
+                free(argument)
+            }
+        }
+        cArguments.append(nil)
+
+        let spawnResult = invocation.executable.withCString { executablePath in
+            cArguments.withUnsafeMutableBufferPointer { arguments in
+                posix_spawn(
+                    &pid,
+                    executablePath,
+                    &fileActions,
+                    &attributes,
+                    arguments.baseAddress,
+                    environ
+                )
+            }
+        }
+        try checkSpawn(spawnResult, operation: "spawn \(invocation.executable)")
+
+        processLock.lock()
+        processIdentifier = pid
+        processTerminationStatus = 0
+        processLock.unlock()
+
+        closeParentChildPipeEnds()
         state.markLaunched()
         standardInputPipe.startWriting()
 
@@ -263,14 +301,8 @@ private final class ProcessExecution: @unchecked Sendable {
     }
 
     private func waitForTermination() async {
-        if state.isTerminated {
-            return
-        }
-
-        await withCheckedContinuation { continuation in
-            if state.storeTerminationContinuation(continuation) == false {
-                continuation.resume()
-            }
+        while reapTerminatedProcess() == false {
+            try? await Task.sleep(for: .milliseconds(10))
         }
     }
 
@@ -281,25 +313,18 @@ private final class ProcessExecution: @unchecked Sendable {
 
         standardInputPipe.cancelWriting()
 
-        if process.isRunning {
-            process.terminate()
-        }
-
-        let processIdentifier = process.processIdentifier
+        let processIdentifier = currentProcessIdentifier
         guard processIdentifier > 0 else {
             return
         }
 
+        sendSignal(SIGTERM, toProcessGroup: processIdentifier)
         let deadline = ContinuousClock.now + .milliseconds(250)
-        while state.isTerminated == false, ContinuousClock.now < deadline {
+        while reapTerminatedProcess() == false, ContinuousClock.now < deadline {
             usleep(10_000)
         }
 
-        guard state.isTerminated == false else {
-            return
-        }
-
-        _ = kill(processIdentifier, SIGKILL)
+        sendSignal(SIGKILL, toProcessGroup: processIdentifier)
     }
 
     private func stopMonitoringOutput() {
@@ -311,6 +336,145 @@ private final class ProcessExecution: @unchecked Sendable {
         buffer.append(pipe.fileHandleForReading.readDataToEndOfFile())
         return buffer.data
     }
+
+    private var currentProcessIdentifier: pid_t {
+        processLock.lock()
+        defer { processLock.unlock() }
+        return processIdentifier
+    }
+
+    private var currentTerminationStatus: Int32 {
+        processLock.lock()
+        defer { processLock.unlock() }
+        return processTerminationStatus
+    }
+
+    private func configureSpawnFileActions(_ fileActions: inout posix_spawn_file_actions_t?) throws {
+        try checkSpawn(
+            posix_spawn_file_actions_adddup2(
+                &fileActions,
+                standardInputPipe.pipe.fileHandleForReading.fileDescriptor,
+                STDIN_FILENO
+            ),
+            operation: "stdin dup2"
+        )
+        try checkSpawn(
+            posix_spawn_file_actions_adddup2(
+                &fileActions,
+                outputPipe.fileHandleForWriting.fileDescriptor,
+                STDOUT_FILENO
+            ),
+            operation: "stdout dup2"
+        )
+        try checkSpawn(
+            posix_spawn_file_actions_adddup2(
+                &fileActions,
+                errorPipe.fileHandleForWriting.fileDescriptor,
+                STDERR_FILENO
+            ),
+            operation: "stderr dup2"
+        )
+
+        let childPipeFileDescriptors = [
+            standardInputPipe.pipe.fileHandleForReading.fileDescriptor,
+            standardInputPipe.pipe.fileHandleForWriting.fileDescriptor,
+            outputPipe.fileHandleForReading.fileDescriptor,
+            outputPipe.fileHandleForWriting.fileDescriptor,
+            errorPipe.fileHandleForReading.fileDescriptor,
+            errorPipe.fileHandleForWriting.fileDescriptor
+        ]
+        for fileDescriptor in childPipeFileDescriptors {
+            try checkSpawn(
+                posix_spawn_file_actions_addclose(&fileActions, fileDescriptor),
+                operation: "close fd \(fileDescriptor)"
+            )
+        }
+
+        if let workingDirectory = invocation.workingDirectory {
+            try workingDirectory.path.withCString { path in
+                if #available(macOS 26.0, *) {
+                    try checkSpawn(
+                        posix_spawn_file_actions_addchdir(&fileActions, path),
+                        operation: "chdir \(workingDirectory.path)"
+                    )
+                } else {
+                    try checkSpawn(
+                        posix_spawn_file_actions_addchdir_np(&fileActions, path),
+                        operation: "chdir \(workingDirectory.path)"
+                    )
+                }
+            }
+        }
+    }
+
+    private func configureSpawnAttributes(_ attributes: inout posix_spawnattr_t?) throws {
+        try checkSpawn(
+            posix_spawnattr_setflags(&attributes, Int16(POSIX_SPAWN_SETPGROUP)),
+            operation: "set process group flag"
+        )
+        try checkSpawn(
+            posix_spawnattr_setpgroup(&attributes, 0),
+            operation: "set process group"
+        )
+    }
+
+    private func closeParentChildPipeEnds() {
+        standardInputPipe.closeReadingHandle()
+        try? outputPipe.fileHandleForWriting.close()
+        try? errorPipe.fileHandleForWriting.close()
+    }
+
+    private func reapTerminatedProcess() -> Bool {
+        if state.isTerminated {
+            return true
+        }
+
+        let processIdentifier = currentProcessIdentifier
+        guard processIdentifier > 0 else {
+            return false
+        }
+
+        var waitStatus: Int32 = 0
+        let result = waitpid(processIdentifier, &waitStatus, WNOHANG)
+        if result == processIdentifier {
+            processLock.lock()
+            processTerminationStatus = normalizedTerminationStatus(from: waitStatus)
+            processLock.unlock()
+            state.markTerminated()
+            return true
+        }
+
+        if result == -1, errno == ECHILD {
+            state.markTerminated()
+            return true
+        }
+
+        return false
+    }
+
+    private func sendSignal(_ signal: Int32, toProcessGroup processIdentifier: pid_t) {
+        let groupResult = kill(-processIdentifier, signal)
+        if groupResult == -1, errno == ESRCH {
+            _ = kill(processIdentifier, signal)
+        }
+    }
+
+    private func normalizedTerminationStatus(from waitStatus: Int32) -> Int32 {
+        let status = waitStatus & 0x7f
+        if status == 0 {
+            return (waitStatus >> 8) & 0xff
+        }
+        if status != 0x7f {
+            return status
+        }
+        return waitStatus
+    }
+
+    private func checkSpawn(_ status: Int32, operation: String) throws {
+        guard status == 0 else {
+            throw LocalProcessRunnerError.failedToLaunch("\(operation): \(String(cString: strerror(status)))")
+        }
+    }
 }
 
 private final class ProcessExecutionState: @unchecked Sendable {
@@ -318,7 +482,6 @@ private final class ProcessExecutionState: @unchecked Sendable {
     private var didLaunch = false
     private var didCancel = false
     private var didTerminate = false
-    private var terminationContinuation: CheckedContinuation<Void, Never>?
 
     var isCancelled: Bool {
         lock.lock()
@@ -351,25 +514,8 @@ private final class ProcessExecutionState: @unchecked Sendable {
     }
 
     func markTerminated() {
-        let continuation: CheckedContinuation<Void, Never>?
         lock.lock()
         didTerminate = true
-        continuation = terminationContinuation
-        terminationContinuation = nil
         lock.unlock()
-
-        continuation?.resume()
-    }
-
-    func storeTerminationContinuation(_ continuation: CheckedContinuation<Void, Never>) -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
-
-        guard didTerminate == false else {
-            return false
-        }
-
-        terminationContinuation = continuation
-        return true
     }
 }

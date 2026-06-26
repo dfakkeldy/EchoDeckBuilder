@@ -102,6 +102,33 @@ final class LocalProcessRunnerTests: XCTestCase {
         XCTAssertLessThan(Date().timeIntervalSince(startedAt), 2.0)
     }
 
+    func testTimeoutTerminatesChildProcessGroup() async throws {
+        let runner = LocalProcessRunner()
+        let directory = FileManager.default.temporaryDirectory
+            .appending(path: "EchoDeckBuilder-ProcessGroup-\(UUID().uuidString)", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let childPIDFile = directory.appending(path: "child.pid")
+
+        do {
+            _ = try await runner.run(ProcessInvocation(
+                executable: "/bin/sh",
+                arguments: [
+                    "-c",
+                    "trap '' TERM; /bin/sh -c 'trap \"\" TERM; while :; do sleep 1; done' & echo $! > '\(childPIDFile.path)'; while :; do sleep 1; done"
+                ],
+                standardInput: "",
+                timeoutSeconds: 0.2
+            ))
+            XCTFail("Expected the process to time out.")
+        } catch LocalProcessRunnerError.timedOut {
+            let childPID = try await waitForChildPID(at: childPIDFile)
+            try await assertProcessExits(childPID)
+        } catch {
+            XCTFail("Expected timedOut error, got \(error).")
+        }
+    }
+
     func testRunCapturesLargeStdoutWithoutDeadlock() async throws {
         let runner = LocalProcessRunner()
         let chunk = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
@@ -116,5 +143,27 @@ final class LocalProcessRunnerTests: XCTestCase {
         XCTAssertEqual(result.terminationStatus, 0)
         XCTAssertEqual(result.standardError, "")
         XCTAssertEqual(result.standardOutput, String(repeating: chunk, count: repetitions))
+    }
+
+    private func waitForChildPID(at url: URL) async throws -> pid_t {
+        for _ in 0..<20 {
+            if let text = try? String(contentsOf: url, encoding: .utf8),
+               let pid = pid_t(text.trimmingCharacters(in: .whitespacesAndNewlines)) {
+                return pid
+            }
+            try await Task.sleep(for: .milliseconds(25))
+        }
+        XCTFail("Timed out waiting for child PID file.")
+        return 0
+    }
+
+    private func assertProcessExits(_ pid: pid_t) async throws {
+        for _ in 0..<20 {
+            if kill(pid, 0) == -1, errno == ESRCH {
+                return
+            }
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        XCTFail("Expected child process \(pid) to be terminated with its process group.")
     }
 }
