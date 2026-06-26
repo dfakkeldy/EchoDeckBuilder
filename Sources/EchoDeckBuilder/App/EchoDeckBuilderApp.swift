@@ -12,7 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 @main
 struct EchoDeckBuilderApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-    @State private var library = LibraryStore()
+    @State private var library = LibraryStore(generatorResolver: DefaultCardGeneratorResolver())
 
     @MainActor
     private func chooseEPUB() {

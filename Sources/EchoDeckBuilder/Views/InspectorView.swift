@@ -10,6 +10,23 @@ struct InspectorView: View {
                 TextField("Target media ID", text: $store.targetMediaID)
             }
 
+            Section("Generation") {
+                Picker("Provider", selection: $store.selectedGenerationProvider) {
+                    ForEach(CardGenerationProvider.allCases) { provider in
+                        Text(provider.displayName).tag(provider)
+                    }
+                }
+
+                LabeledContent("Availability") {
+                    Text(store.generationAvailability.message)
+                        .foregroundStyle(
+                            store.generationAvailability.isAvailable
+                                ? AnyShapeStyle(.secondary)
+                                : AnyShapeStyle(.red)
+                        )
+                }
+            }
+
             if let card = store.selectedCard {
                 Section("Source") {
                     LabeledContent("Anchor", value: card.sourceAnchor.suffix)
