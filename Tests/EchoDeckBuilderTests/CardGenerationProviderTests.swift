@@ -42,6 +42,17 @@ final class CardGenerationProviderTests: XCTestCase {
         let cards = try await resolver.generator(for: .foundationModels).generateCards(for: [section])
         XCTAssertEqual(cards, [expectedCard])
     }
+
+    func testDefaultResolverKeepsFixtureAvailable() async throws {
+        let resolver = DefaultCardGeneratorResolver()
+        let availability = resolver.availability(for: .fixture)
+
+        XCTAssertTrue(availability.isAvailable)
+        XCTAssertEqual(availability.message, "Fixture generator ready")
+
+        let cards = try await resolver.generator(for: .fixture).generateCards(for: [])
+        XCTAssertEqual(cards, [])
+    }
 }
 
 private struct StaticCardGenerator: CardGenerator {

@@ -13,7 +13,7 @@ public struct DefaultCardGeneratorResolver: CardGeneratorResolving {
         case .fixture:
             return .available("Fixture generator ready")
         case .foundationModels:
-            return .unavailable("Foundation Models generator is not connected yet")
+            return FoundationModelAvailability.current()
         }
     }
 
@@ -22,7 +22,18 @@ public struct DefaultCardGeneratorResolver: CardGeneratorResolving {
         case .fixture:
             return FixtureCardGenerator()
         case .foundationModels:
-            return UnavailableCardGenerator(message: availability(for: provider).message)
+            let availability = availability(for: provider)
+            guard availability.isAvailable else {
+                return UnavailableCardGenerator(message: availability.message)
+            }
+
+            #if canImport(FoundationModels)
+            if #available(macOS 26.0, *) {
+                return FoundationModelCardGenerator()
+            }
+            #endif
+
+            return UnavailableCardGenerator(message: availability.message)
         }
     }
 }
