@@ -141,3 +141,33 @@ Executed 39 tests, with 0 failures
 ## Any issues or concerns
 
 No blocking issues. The default resolver intentionally leaves Foundation Models unavailable with the exact placeholder message from the brief until later tasks connect a real implementation.
+
+---
+
+## Fix Summary (Task-review follow-up)
+
+- Added provider allowlisting to `FixedCardGeneratorResolver` while preserving the existing default `init(generator:)` behavior that marks both `.fixture` and `.foundationModels` available.
+- Updated the legacy `LibraryStore(sections:cards:generator:)` initializer to use a fixture-only fixed resolver so later mutation of `selectedGenerationProvider` cannot silently treat Foundation Models as ready.
+- Added a focused `LibraryStore` regression test proving the legacy initializer reports Foundation Models as unavailable, refuses generation, and never calls the injected fixture generator after provider mutation.
+
+## Tests Run And Results
+
+1. `swift test --filter CardGenerationProviderTests`
+   - Passed, 3 tests, 0 failures
+2. `swift test --filter LibraryStoreTests`
+   - Passed, 12 tests, 0 failures
+3. `swift test`
+   - Passed, 40 tests, 0 failures
+
+## Files Changed
+
+- `Sources/EchoDeckBuilder/Services/CardGeneratorResolver.swift`
+- `Sources/EchoDeckBuilder/Stores/LibraryStore.swift`
+- `Tests/EchoDeckBuilderTests/LibraryStoreTests.swift`
+- `.superpowers/sdd/task-1-report.md`
+
+## Self-review Findings/Concerns
+
+- The compatibility fix stays narrowly scoped to the legacy initializer path and does not alter the plan-mandated behavior of `FixedCardGeneratorResolver(generator:)`.
+- The unavailable message for the limited resolver matches the default resolver's current Foundation Models placeholder, which keeps degradation behavior consistent.
+- No additional concerns after the required focused and full test runs.

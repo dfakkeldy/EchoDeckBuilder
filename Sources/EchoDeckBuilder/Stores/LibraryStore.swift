@@ -30,7 +30,10 @@ public final class LibraryStore {
             sections: sections,
             cards: cards,
             selectedGenerationProvider: .fixture,
-            generatorResolver: FixedCardGeneratorResolver(generator: generator)
+            generatorResolver: FixedCardGeneratorResolver(
+                generator: generator,
+                availableProviders: [.fixture]
+            )
         )
     }
 

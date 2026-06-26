@@ -29,17 +29,34 @@ public struct DefaultCardGeneratorResolver: CardGeneratorResolving {
 
 public struct FixedCardGeneratorResolver: CardGeneratorResolving {
     private let generator: any CardGenerator
+    private let availableProviders: Set<CardGenerationProvider>
 
     public init(generator: any CardGenerator) {
+        self.init(generator: generator, availableProviders: Set(CardGenerationProvider.allCases))
+    }
+
+    public init(
+        generator: any CardGenerator,
+        availableProviders: Set<CardGenerationProvider>
+    ) {
         self.generator = generator
+        self.availableProviders = availableProviders
     }
 
     public func availability(for provider: CardGenerationProvider) -> CardGenerationAvailability {
-        .available("\(provider.displayName) ready")
+        guard availableProviders.contains(provider) else {
+            return .unavailable("\(provider.displayName) generator is not connected yet")
+        }
+
+        return .available("\(provider.displayName) ready")
     }
 
     public func generator(for provider: CardGenerationProvider) -> any CardGenerator {
-        generator
+        guard availableProviders.contains(provider) else {
+            return UnavailableCardGenerator(message: availability(for: provider).message)
+        }
+
+        return generator
     }
 }
 

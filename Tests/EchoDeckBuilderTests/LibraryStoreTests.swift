@@ -206,6 +206,30 @@ final class LibraryStoreTests: XCTestCase {
         XCTAssertEqual(store.statusMessage, "Generated 1 draft cards")
     }
 
+    func testLegacyGeneratorInitializerKeepsFoundationModelsUnavailable() async throws {
+        let fixture = try makeFixture()
+        let generator = CountingCardGenerator(cards: [fixture.card], delayNanoseconds: 0)
+        let store = LibraryStore(sections: [fixture.section], generator: generator)
+
+        store.selectedGenerationProvider = .foundationModels
+
+        XCTAssertFalse(store.generationAvailability.isAvailable)
+        XCTAssertEqual(
+            store.generationAvailability.message,
+            "Foundation Models generator is not connected yet"
+        )
+        XCTAssertFalse(store.canGenerateCards)
+
+        store.generateCardsForSelectedBook()
+
+        let callCount = await generator.recordedCallCount()
+
+        XCTAssertEqual(store.statusMessage, "Foundation Models generator is not connected yet")
+        XCTAssertFalse(store.isGeneratingCards)
+        XCTAssertEqual(store.cards, [])
+        XCTAssertEqual(callCount, 0)
+    }
+
     private func makeFixture(
         heading: String = "Intro",
         suffix: String = "s1-b1",
