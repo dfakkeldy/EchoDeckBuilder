@@ -28,6 +28,31 @@ final class LocalProcessRunnerTests: XCTestCase {
         }
     }
 
+    func testRunReportsCancellationWhenProcessExitsAfterTerminate() async throws {
+        let runner = LocalProcessRunner()
+
+        let task = Task {
+            try await runner.run(ProcessInvocation(
+                executable: "/bin/sleep",
+                arguments: ["30"],
+                standardInput: "",
+                timeoutSeconds: 30
+            ))
+        }
+
+        try await Task.sleep(for: .milliseconds(200))
+        task.cancel()
+
+        do {
+            _ = try await task.value
+            XCTFail("Expected cancellation.")
+        } catch is CancellationError {
+            XCTAssertTrue(task.isCancelled)
+        } catch {
+            XCTFail("Expected CancellationError, got \(error).")
+        }
+    }
+
     func testRunTimesOutForLongRunningProcess() async throws {
         let runner = LocalProcessRunner()
         let startedAt = Date()

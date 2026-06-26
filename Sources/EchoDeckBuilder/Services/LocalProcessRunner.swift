@@ -87,25 +87,93 @@ private final class LockedDataBuffer: @unchecked Sendable {
     }
 }
 
+private final class StandardInputPipe: @unchecked Sendable {
+    let pipe = Pipe()
+
+    private let input: String
+    private let lock = NSLock()
+    private var task: Task<Void, Never>?
+    private var didCloseWriting = false
+
+    init(input: String) {
+        self.input = input
+        _ = fcntl(pipe.fileHandleForWriting.fileDescriptor, F_SETNOSIGPIPE, 1)
+    }
+
+    func startWriting() {
+        lock.lock()
+        guard task == nil, didCloseWriting == false else {
+            lock.unlock()
+            return
+        }
+
+        let writeTask = Task.detached(priority: .userInitiated) { [self] in
+            writeInput()
+        }
+        task = writeTask
+        lock.unlock()
+    }
+
+    func cancelWriting() {
+        let taskToCancel: Task<Void, Never>?
+        lock.lock()
+        taskToCancel = task
+        lock.unlock()
+
+        taskToCancel?.cancel()
+        closeWritingHandle()
+    }
+
+    private func writeInput() {
+        defer { closeWritingHandle() }
+
+        do {
+            try Task.checkCancellation()
+            guard input.isEmpty == false else {
+                return
+            }
+
+            try pipe.fileHandleForWriting.write(contentsOf: Data(input.utf8))
+        } catch {
+            return
+        }
+    }
+
+    private func closeWritingHandle() {
+        lock.lock()
+        guard didCloseWriting == false else {
+            lock.unlock()
+            return
+        }
+        didCloseWriting = true
+        lock.unlock()
+
+        try? pipe.fileHandleForWriting.close()
+    }
+}
+
 private final class ProcessExecution: @unchecked Sendable {
     private let invocation: ProcessInvocation
     private let process = Process()
+    private let standardInputPipe: StandardInputPipe
     private let outputPipe = Pipe()
     private let errorPipe = Pipe()
     private let stdoutBuffer = LockedDataBuffer()
     private let stderrBuffer = LockedDataBuffer()
     private let state = ProcessExecutionState()
-    private var standardInputURL: URL?
-    private var standardInputHandle: FileHandle?
 
     init(invocation: ProcessInvocation) {
         self.invocation = invocation
+        self.standardInputPipe = StandardInputPipe(input: invocation.standardInput)
         configureProcess()
     }
 
     func run() async throws -> ProcessResult {
         try launch()
-        defer { stopMonitoringOutput() }
+        defer {
+            standardInputPipe.cancelWriting()
+            stopMonitoringOutput()
+        }
 
         let deadline = ContinuousClock.now + .seconds(invocation.timeoutSeconds)
         do {
@@ -123,6 +191,11 @@ private final class ProcessExecution: @unchecked Sendable {
             await waitForTermination()
             throw CancellationError()
         }
+
+        if state.isCancelled {
+            throw CancellationError()
+        }
+        try Task.checkCancellation()
 
         let stdoutData = collectedOutput(from: outputPipe, buffer: stdoutBuffer)
         let stderrData = collectedOutput(from: errorPipe, buffer: stderrBuffer)
@@ -152,6 +225,7 @@ private final class ProcessExecution: @unchecked Sendable {
         process.executableURL = URL(fileURLWithPath: invocation.executable)
         process.arguments = invocation.arguments
         process.currentDirectoryURL = invocation.workingDirectory
+        process.standardInput = standardInputPipe.pipe
         process.standardOutput = outputPipe
         process.standardError = errorPipe
 
@@ -179,41 +253,12 @@ private final class ProcessExecution: @unchecked Sendable {
     }
 
     private func launch() throws {
-        try prepareStandardInput()
-        do {
-            try process.run()
-            state.markLaunched()
-        } catch {
-            cleanupStandardInput()
-            throw error
-        }
-
-        cleanupStandardInput()
+        try process.run()
+        state.markLaunched()
+        standardInputPipe.startWriting()
 
         if state.isCancelled {
             terminateProcess()
-        }
-    }
-
-    private func prepareStandardInput() throws {
-        let inputURL = FileManager.default.temporaryDirectory
-            .appending(path: "echodeck-stdin-\(UUID().uuidString).txt")
-        let inputData = Data(invocation.standardInput.utf8)
-        try inputData.write(to: inputURL, options: [.atomic])
-
-        let inputHandle = try FileHandle(forReadingFrom: inputURL)
-        process.standardInput = inputHandle
-        standardInputURL = inputURL
-        standardInputHandle = inputHandle
-    }
-
-    private func cleanupStandardInput() {
-        standardInputHandle?.closeFile()
-        standardInputHandle = nil
-
-        if let standardInputURL {
-            try? FileManager.default.removeItem(at: standardInputURL)
-            self.standardInputURL = nil
         }
     }
 
@@ -233,6 +278,8 @@ private final class ProcessExecution: @unchecked Sendable {
         guard state.canTerminate else {
             return
         }
+
+        standardInputPipe.cancelWriting()
 
         if process.isRunning {
             process.terminate()
