@@ -90,12 +90,13 @@ private final class LockedDataBuffer: @unchecked Sendable {
 private final class ProcessExecution: @unchecked Sendable {
     private let invocation: ProcessInvocation
     private let process = Process()
-    private let inputPipe = Pipe()
     private let outputPipe = Pipe()
     private let errorPipe = Pipe()
     private let stdoutBuffer = LockedDataBuffer()
     private let stderrBuffer = LockedDataBuffer()
     private let state = ProcessExecutionState()
+    private var standardInputURL: URL?
+    private var standardInputHandle: FileHandle?
 
     init(invocation: ProcessInvocation) {
         self.invocation = invocation
@@ -151,7 +152,6 @@ private final class ProcessExecution: @unchecked Sendable {
         process.executableURL = URL(fileURLWithPath: invocation.executable)
         process.arguments = invocation.arguments
         process.currentDirectoryURL = invocation.workingDirectory
-        process.standardInput = inputPipe
         process.standardOutput = outputPipe
         process.standardError = errorPipe
 
@@ -179,16 +179,41 @@ private final class ProcessExecution: @unchecked Sendable {
     }
 
     private func launch() throws {
-        try process.run()
-        state.markLaunched()
-
-        if let inputData = invocation.standardInput.data(using: .utf8) {
-            inputPipe.fileHandleForWriting.write(inputData)
+        try prepareStandardInput()
+        do {
+            try process.run()
+            state.markLaunched()
+        } catch {
+            cleanupStandardInput()
+            throw error
         }
-        inputPipe.fileHandleForWriting.closeFile()
+
+        cleanupStandardInput()
 
         if state.isCancelled {
             terminateProcess()
+        }
+    }
+
+    private func prepareStandardInput() throws {
+        let inputURL = FileManager.default.temporaryDirectory
+            .appending(path: "echodeck-stdin-\(UUID().uuidString).txt")
+        let inputData = Data(invocation.standardInput.utf8)
+        try inputData.write(to: inputURL, options: [.atomic])
+
+        let inputHandle = try FileHandle(forReadingFrom: inputURL)
+        process.standardInput = inputHandle
+        standardInputURL = inputURL
+        standardInputHandle = inputHandle
+    }
+
+    private func cleanupStandardInput() {
+        standardInputHandle?.closeFile()
+        standardInputHandle = nil
+
+        if let standardInputURL {
+            try? FileManager.default.removeItem(at: standardInputURL)
+            self.standardInputURL = nil
         }
     }
 

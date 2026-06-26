@@ -52,6 +52,31 @@ final class LocalProcessRunnerTests: XCTestCase {
         XCTAssertLessThan(Date().timeIntervalSince(startedAt), 2.0)
     }
 
+    func testRunTimesOutWhenChildDoesNotReadLargeStandardInput() async throws {
+        let runner = LocalProcessRunner()
+        let startedAt = Date()
+        let largeInput = String(repeating: "large prompt body\n", count: 65_536)
+
+        do {
+            _ = try await runner.run(ProcessInvocation(
+                executable: "/bin/sh",
+                arguments: ["-c", "trap '' TERM; while :; do :; done"],
+                standardInput: largeInput,
+                timeoutSeconds: 0.2
+            ))
+            XCTFail("Expected the process to time out.")
+        } catch let error as LocalProcessRunnerError {
+            switch error {
+            case .timedOut(let timeoutSeconds):
+                XCTAssertEqual(timeoutSeconds, 0.2, accuracy: 0.001)
+            default:
+                XCTFail("Expected timedOut error, got \(error).")
+            }
+        }
+
+        XCTAssertLessThan(Date().timeIntervalSince(startedAt), 2.0)
+    }
+
     func testRunCapturesLargeStdoutWithoutDeadlock() async throws {
         let runner = LocalProcessRunner()
         let chunk = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
