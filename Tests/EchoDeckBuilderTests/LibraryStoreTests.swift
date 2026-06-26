@@ -195,10 +195,10 @@ private actor CountingCardGenerator: CardGenerator {
         self.delayNanoseconds = delayNanoseconds
     }
 
-    func generateCards(for sections: [BookSection]) async throws -> [DeckCard] {
+    func generateCards(for request: CardGenerationRequest) async throws -> CardGenerationResult {
         callCount += 1
         try await Task.sleep(nanoseconds: delayNanoseconds)
-        return cards
+        return CardGenerationResult(bookBrief: .fixture, cards: cards)
     }
 
     func recordedCallCount() -> Int {
@@ -215,13 +215,15 @@ private actor ManuallyCompletingCardGenerator: CardGenerator {
         self.cards = cards
     }
 
-    func generateCards(for sections: [BookSection]) async throws -> [DeckCard] {
+    func generateCards(for request: CardGenerationRequest) async throws -> CardGenerationResult {
         startContinuations.forEach { $0.resume() }
         startContinuations = []
 
-        return await withCheckedContinuation { continuation in
+        let generatedCards = await withCheckedContinuation { continuation in
             generationContinuation = continuation
         }
+
+        return CardGenerationResult(bookBrief: .fixture, cards: generatedCards)
     }
 
     func waitForGenerationToStart() async {
