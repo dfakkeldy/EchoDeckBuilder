@@ -466,10 +466,7 @@ private final class ProcessExecution: @unchecked Sendable {
     }
 
     private func sendSignal(_ signal: Int32, toProcessGroup processIdentifier: pid_t) {
-        let groupResult = kill(-processIdentifier, signal)
-        if groupResult == -1, errno == ESRCH {
-            _ = kill(processIdentifier, signal)
-        }
+        _ = kill(-processIdentifier, signal)
     }
 
     private func normalizedTerminationStatus(from waitStatus: Int32) -> Int32 {
