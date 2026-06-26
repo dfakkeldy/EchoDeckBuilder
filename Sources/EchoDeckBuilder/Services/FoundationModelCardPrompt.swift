@@ -36,7 +36,11 @@ public enum FoundationModelCardPrompt {
 
     public static func excerpt(from text: String, maxCharacters: Int) -> String {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard maxCharacters > 0, trimmed.count > maxCharacters else {
+        guard maxCharacters > 0 else {
+            return ""
+        }
+
+        guard trimmed.count > maxCharacters else {
             return trimmed
         }
 

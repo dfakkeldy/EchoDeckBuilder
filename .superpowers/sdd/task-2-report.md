@@ -80,3 +80,24 @@ Executed 47 tests, with 0 failures
 
 ### Issues or concerns
 - No current concerns.
+
+## Task 2 Fix Follow-Up: Prompt-Length Edge Case
+
+### Fix summary
+- Updated `FoundationModelCardPrompt.excerpt(from:maxCharacters:)` to return an empty string when `maxCharacters` is `0` or negative, instead of returning the full trimmed source text.
+- Added a focused regression test covering both zero and negative character limits.
+- Preserved all existing prompt construction behavior for positive limits, including deterministic trimming and sentence-boundary preference.
+
+### Tests run and results
+- `swift test --filter FoundationModelCardPromptTests` -> PASS (`Executed 5 tests, with 0 failures`)
+- `swift test` -> PASS (`Executed 48 tests, with 0 failures`)
+
+### Files changed
+- `/Users/dfakkeldy/.codex/worktrees/202c/EchoDeckBuilder/Sources/EchoDeckBuilder/Services/FoundationModelCardPrompt.swift`
+- `/Users/dfakkeldy/.codex/worktrees/202c/EchoDeckBuilder/Tests/EchoDeckBuilderTests/FoundationModelCardPromptTests.swift`
+- `/Users/dfakkeldy/.codex/worktrees/202c/EchoDeckBuilder/.superpowers/sdd/task-2-report.md`
+
+### Self-review findings/concerns
+- Verified the fix is scoped strictly to the non-positive length edge case called out in review.
+- Verified no `FoundationModels` import or usage was introduced.
+- No additional concerns after the targeted and full test runs.

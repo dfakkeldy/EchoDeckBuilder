@@ -38,6 +38,13 @@ final class FoundationModelCardPromptTests: XCTestCase {
         XCTAssertEqual(excerpt, "abcdefghij")
     }
 
+    func testExcerptReturnsEmptyStringWhenMaxCharactersIsZeroOrNegative() {
+        let text = " Trimmed source text should not leak when the cap is non-positive. "
+
+        XCTAssertEqual(FoundationModelCardPrompt.excerpt(from: text, maxCharacters: 0), "")
+        XCTAssertEqual(FoundationModelCardPrompt.excerpt(from: text, maxCharacters: -5), "")
+    }
+
     func testInstructionsRequireParaphrasingAndGrounding() {
         XCTAssertTrue(FoundationModelCardPrompt.instructions.contains("Only use the supplied EPUB section"))
         XCTAssertTrue(FoundationModelCardPrompt.instructions.contains("Paraphrase"))
