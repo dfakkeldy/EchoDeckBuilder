@@ -53,6 +53,50 @@ final class GeneratedCardDraftTests: XCTestCase {
         )
     }
 
+    func testDraftMapperRejectsFrontTextThatExceedsLengthLimit() throws {
+        let anchor = try XCTUnwrap(SourceAnchor(suffix: "s1-b3"))
+        let section = BookSection(
+            spineIndex: 1,
+            blockIndex: 3,
+            heading: "Intro",
+            text: "Short text.",
+            anchor: anchor
+        )
+        let draft = GeneratedCardDraft(
+            frontText: String(
+                repeating: "A",
+                count: GeneratedCardDraftMapper.maximumFrontTextCharacters + 1
+            ),
+            backText: "Short answer",
+            kind: .basic,
+            tags: []
+        )
+
+        XCTAssertNil(GeneratedCardDraftMapper.deckCard(from: draft, section: section))
+    }
+
+    func testDraftMapperRejectsBackTextThatExceedsLengthLimit() throws {
+        let anchor = try XCTUnwrap(SourceAnchor(suffix: "s1-b4"))
+        let section = BookSection(
+            spineIndex: 1,
+            blockIndex: 4,
+            heading: "Intro",
+            text: "Short text.",
+            anchor: anchor
+        )
+        let draft = GeneratedCardDraft(
+            frontText: "Short question",
+            backText: String(
+                repeating: "B",
+                count: GeneratedCardDraftMapper.maximumBackTextCharacters + 1
+            ),
+            kind: .basic,
+            tags: []
+        )
+
+        XCTAssertNil(GeneratedCardDraftMapper.deckCard(from: draft, section: section))
+    }
+
     func testDraftMapperDeduplicatesDefaultTags() throws {
         let anchor = try XCTUnwrap(SourceAnchor(suffix: "s1-b2"))
         let section = BookSection(

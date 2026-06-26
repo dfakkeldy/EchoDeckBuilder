@@ -18,6 +18,17 @@ final class CardGenerationProviderTests: XCTestCase {
         XCTAssertEqual(unavailable.message, "Foundation Models requires macOS 26+")
     }
 
+    func testFoundationModelAvailabilityMessagesExplainAssetStates() {
+        XCTAssertEqual(
+            FoundationModelAvailability.modelAssetsNotReadyMessage,
+            "Apple Intelligence language model assets are downloading or not ready"
+        )
+        XCTAssertEqual(
+            FoundationModelAvailability.modelAssetsUnavailableMessage,
+            "Apple Intelligence language model assets are unavailable"
+        )
+    }
+
     func testFixedResolverAlwaysReturnsInjectedGenerator() async throws {
         let anchor = try XCTUnwrap(SourceAnchor(suffix: "s1-b1"))
         let section = BookSection(

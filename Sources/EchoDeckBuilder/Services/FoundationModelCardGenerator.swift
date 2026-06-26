@@ -105,13 +105,13 @@ public struct FoundationModelCardGenerator: CardGenerator {
         case .exceededContextWindowSize:
             return .failed("A source section is too large for Foundation Models")
         case .assetsUnavailable:
-            return .unavailable("Apple Intelligence language model assets are unavailable")
+            return .unavailable(FoundationModelAvailability.modelAssetsUnavailableMessage)
         case .guardrailViolation, .refusal:
             return .failed("Foundation Models blocked the generated card for this section")
         case .unsupportedGuide:
             return .failed("The Foundation Models card schema is not supported")
         case .unsupportedLanguageOrLocale:
-            return .unavailable("Foundation Models does not support the current language")
+            return .unavailable(FoundationModelAvailability.unsupportedLanguageMessage)
         case .decodingFailure:
             return .failed("Foundation Models could not produce a valid card draft")
         case .rateLimited:

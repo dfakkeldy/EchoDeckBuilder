@@ -15,11 +15,20 @@ public struct GeneratedCardDraft: Equatable, Sendable {
 }
 
 public enum GeneratedCardDraftMapper {
-    public static func deckCard(from draft: GeneratedCardDraft, section: BookSection) -> DeckCard? {
-        let frontText = draft.frontText.trimmingCharacters(in: .whitespacesAndNewlines)
-        let backText = draft.backText.trimmingCharacters(in: .whitespacesAndNewlines)
+    static let maximumFrontTextCharacters = 240
+    static let maximumBackTextCharacters = 480
 
-        guard !frontText.isEmpty, !backText.isEmpty else {
+    public static func deckCard(from draft: GeneratedCardDraft, section: BookSection) -> DeckCard? {
+        guard
+            let frontText = normalizedText(
+                from: draft.frontText,
+                maximumCharacters: maximumFrontTextCharacters
+            ),
+            let backText = normalizedText(
+                from: draft.backText,
+                maximumCharacters: maximumBackTextCharacters
+            )
+        else {
             return nil
         }
 
@@ -31,6 +40,14 @@ public enum GeneratedCardDraftMapper {
             tags: mergedTags(from: draft.tags),
             sourceAnchor: section.anchor
         )
+    }
+
+    private static func normalizedText(from text: String, maximumCharacters: Int) -> String? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed.count <= maximumCharacters else {
+            return nil
+        }
+        return trimmed
     }
 
     private static func mergedTags(from generatedTags: [String]) -> [String] {
