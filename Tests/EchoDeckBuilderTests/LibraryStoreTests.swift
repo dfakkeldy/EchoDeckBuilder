@@ -230,6 +230,23 @@ final class LibraryStoreTests: XCTestCase {
         XCTAssertEqual(callCount, 0)
     }
 
+    func testChangingSelectedGenerationProviderUpdatesAvailability() throws {
+        let fixture = try makeFixture()
+        let store = LibraryStore(
+            sections: [fixture.section],
+            selectedGenerationProvider: .fixture,
+            generatorResolver: UnavailableFoundationModelResolver()
+        )
+
+        XCTAssertEqual(store.generationAvailability.message, "Fixture generator ready")
+        XCTAssertTrue(store.canGenerateCards)
+
+        store.selectedGenerationProvider = .foundationModels
+
+        XCTAssertEqual(store.generationAvailability.message, "Foundation Models requires macOS 26+")
+        XCTAssertFalse(store.canGenerateCards)
+    }
+
     private func makeFixture(
         heading: String = "Intro",
         suffix: String = "s1-b1",
