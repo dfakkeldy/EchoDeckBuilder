@@ -43,7 +43,7 @@ final class LocalCodexCLIGeneratorTests: XCTestCase {
 
         let result = try await generator.generateCards(for: CardGenerationRequest(
             sections: sections,
-            settings: GenerationSettings(provider: .codexCLI, batchSize: 1)
+            settings: GenerationSettings(provider: .codexCLI, model: "gpt-5.4", batchSize: 1)
         ))
 
         let invocations = await runner.recordedInvocations()
@@ -51,9 +51,16 @@ final class LocalCodexCLIGeneratorTests: XCTestCase {
         XCTAssertEqual(invocations[0].executable, "/usr/bin/env")
         XCTAssertEqual(Array(invocations[0].arguments.prefix(2)), ["codex", "exec"])
         XCTAssertTrue(invocations[0].arguments.contains("--ephemeral"))
+        XCTAssertTrue(invocations[0].arguments.contains("--ignore-user-config"))
+        XCTAssertTrue(invocations[0].arguments.contains("--ignore-rules"))
+        XCTAssertTrue(invocations[0].arguments.contains("--skip-git-repo-check"))
         XCTAssertTrue(invocations[0].arguments.contains("--sandbox"))
-        XCTAssertTrue(invocations[0].arguments.contains("read-only"))
+        XCTAssertEqual(codexArgument(after: "--sandbox", in: invocations[0]), "read-only")
+        XCTAssertEqual(codexArgument(after: "-c", in: invocations[0]), "approval_policy=\"never\"")
+        XCTAssertEqual(codexArgument(after: "--model", in: invocations[0]), "gpt-5.4")
         XCTAssertTrue(invocations[0].arguments.contains("--output-schema"))
+        XCTAssertNotNil(invocations[0].workingDirectory)
+        XCTAssertEqual(codexArgument(after: "-C", in: invocations[0]), invocations[0].workingDirectory?.path)
         XCTAssertEqual(invocations[0].arguments.last, "-")
         XCTAssertTrue(invocations[0].standardInput.contains("<source-outline>"))
         XCTAssertTrue(invocations[1].standardInput.contains(#"<source-block anchor="s1-b1">"#))
@@ -66,6 +73,7 @@ final class LocalCodexCLIGeneratorTests: XCTestCase {
         let schemaPath = try XCTUnwrap(schemaSnapshots.first?.path)
         let outputSchemaIndex = try XCTUnwrap(invocations[0].arguments.firstIndex(of: "--output-schema"))
         XCTAssertEqual(invocations[0].arguments[outputSchemaIndex + 1], schemaPath)
+        XCTAssertEqual(invocations[0].workingDirectory?.path, URL(fileURLWithPath: schemaPath).deletingLastPathComponent().path)
         XCTAssertTrue(schemaSnapshots.allSatisfy { $0.path == schemaPath })
         XCTAssertTrue(schemaSnapshots.allSatisfy(\.fileExistsDuringRun))
         XCTAssertTrue(schemaSnapshots.allSatisfy { $0.contents.contains("\"bookBrief\"") })
@@ -75,6 +83,8 @@ final class LocalCodexCLIGeneratorTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: URL(fileURLWithPath: schemaPath).deletingLastPathComponent().path))
 
         XCTAssertEqual(result.bookBrief.summary, "Brief")
+        XCTAssertEqual(result.runMetadata?.provider, "codex-cli")
+        XCTAssertEqual(result.runMetadata?.model, "default")
         XCTAssertEqual(result.cards.map(\.frontText), ["Front 1", "Front 2"])
         XCTAssertEqual(result.cards.map(\.sourceAnchor.suffix), ["s1-b1", "s1-b2"])
         XCTAssertEqual(result.warnings.map(\.message), ["brief warning", "batch 1 warning", "batch 2 warning"])
@@ -141,6 +151,15 @@ final class LocalCodexCLIGeneratorTests: XCTestCase {
 }
 
 private struct SchemaDataFailure: Error {}
+
+private func codexArgument(after flag: String, in invocation: ProcessInvocation) -> String? {
+    guard let index = invocation.arguments.firstIndex(of: flag),
+          invocation.arguments.indices.contains(index + 1)
+    else {
+        return nil
+    }
+    return invocation.arguments[index + 1]
+}
 
 private struct SchemaSnapshot: Sendable {
     let path: String

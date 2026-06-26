@@ -43,11 +43,14 @@ public struct LocalCodexCLIGenerator: CardGenerator {
 
     public func generateCards(for request: CardGenerationRequest) async throws -> CardGenerationResult {
         let schemaFileURL = try writeSchemaFile()
+        let workingDirectory = schemaFileURL.deletingLastPathComponent()
         defer { try? FileManager.default.removeItem(at: schemaFileURL.deletingLastPathComponent()) }
 
         let briefOutput = try await runCodex(
             prompt: promptBuilder.bookBriefPrompt(for: request),
-            schemaFileURL: schemaFileURL
+            schemaFileURL: schemaFileURL,
+            settings: request.settings,
+            workingDirectory: workingDirectory
         )
         let briefResult = try validator.validate(briefOutput, batchSections: request.sections)
         let bookBrief = briefResult.bookBrief
@@ -57,13 +60,23 @@ public struct LocalCodexCLIGenerator: CardGenerator {
 
         for batch in batcher.batches(from: request.sections, maxSectionsPerBatch: request.settings.batchSize) {
             let prompt = promptBuilder.batchPrompt(for: request, bookBrief: bookBrief, batch: batch)
-            let output = try await runCodex(prompt: prompt, schemaFileURL: schemaFileURL)
+            let output = try await runCodex(
+                prompt: prompt,
+                schemaFileURL: schemaFileURL,
+                settings: request.settings,
+                workingDirectory: workingDirectory
+            )
             let result = try validator.validate(output, batchSections: batch)
             cards.append(contentsOf: result.cards)
             warnings.append(contentsOf: result.warnings)
         }
 
-        return CardGenerationResult(bookBrief: bookBrief, cards: cards, warnings: warnings)
+        return CardGenerationResult(
+            runMetadata: briefResult.runMetadata,
+            bookBrief: bookBrief,
+            cards: cards,
+            warnings: warnings
+        )
     }
 
     private func writeSchemaFile() throws -> URL {
@@ -80,17 +93,34 @@ public struct LocalCodexCLIGenerator: CardGenerator {
         }
     }
 
-    private func runCodex(prompt: String, schemaFileURL: URL) async throws -> AIModelOutput {
+    private func runCodex(
+        prompt: String,
+        schemaFileURL: URL,
+        settings: GenerationSettings,
+        workingDirectory: URL
+    ) async throws -> AIModelOutput {
+        var arguments = [
+            "codex", "exec",
+            "--ephemeral",
+            "--ignore-user-config",
+            "--ignore-rules",
+            "--skip-git-repo-check",
+            "--sandbox", "read-only",
+            "-c", "approval_policy=\"never\"",
+            "-C", workingDirectory.path,
+            "--output-schema", schemaFileURL.path
+        ]
+        let model = settings.model.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !model.isEmpty, model != "default" {
+            arguments.append(contentsOf: ["--model", model])
+        }
+        arguments.append("-")
+
         let invocation = ProcessInvocation(
             executable: "/usr/bin/env",
-            arguments: [
-                "codex", "exec",
-                "--ephemeral",
-                "--sandbox", "read-only",
-                "--output-schema", schemaFileURL.path,
-                "-"
-            ],
+            arguments: arguments,
             standardInput: prompt,
+            workingDirectory: workingDirectory,
             timeoutSeconds: 180
         )
         let result = try await processRunner.run(invocation)

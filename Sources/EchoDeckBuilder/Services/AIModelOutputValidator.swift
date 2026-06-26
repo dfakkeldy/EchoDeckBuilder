@@ -9,6 +9,7 @@ public enum AIModelOutputValidationError: Error, Equatable, LocalizedError, Send
     case unsupportedCardKind(String, String)
     case invalidClozeText(String)
     case invalidVisual(String)
+    case longSourceQuotation(String)
 
     public var errorDescription: String? {
         switch self {
@@ -28,6 +29,8 @@ public enum AIModelOutputValidationError: Error, Equatable, LocalizedError, Send
             "The AI response included an invalid cloze card for \(anchor)."
         case .invalidVisual(let anchor):
             "The AI response included invalid visual metadata for \(anchor)."
+        case .longSourceQuotation(let anchor):
+            "The AI response copied too much source text for \(anchor)."
         }
     }
 }
@@ -61,12 +64,17 @@ public struct AIModelOutputValidator: Sendable {
             }
 
             let kind = try cardKind(from: rawCard.kind, anchor: anchor.suffix)
+            let clozeText = rawCard.clozeText?.trimmedForGeneration ?? ""
             if kind == .cloze {
-                let clozeText = rawCard.clozeText?.trimmedForGeneration ?? ""
                 guard clozeText.contains("{{c1::") else {
                     throw AIModelOutputValidationError.invalidClozeText(anchor.suffix)
                 }
             }
+            try rejectLongSourceQuotation(
+                texts: [frontText, backText, clozeText],
+                sourceText: section.text,
+                anchor: anchor.suffix
+            )
 
             return DeckCard(
                 sectionID: section.id,
@@ -75,11 +83,23 @@ public struct AIModelOutputValidator: Sendable {
                 kind: kind,
                 tags: rawCard.tags.map(\.trimmedForGeneration).filter { !$0.isEmpty },
                 sourceAnchor: anchor,
-                visual: try visual(from: rawCard.visual, anchor: anchor.suffix)
+                visual: try visual(from: rawCard.visual, anchor: anchor.suffix),
+                clozeText: clozeText.isEmpty ? nil : clozeText,
+                aiMetadata: CardAIMetadata(
+                    importance: rawCard.importance,
+                    confidence: rawCard.confidence,
+                    rationale: rawCard.rationale.trimmedForGeneration
+                )
             )
         }
 
         return CardGenerationResult(
+            runMetadata: GenerationRunMetadata(
+                provider: output.run.provider.trimmedForGeneration,
+                model: output.run.model.trimmedForGeneration,
+                sourceScope: output.run.sourceScope.trimmedForGeneration,
+                imageMode: output.run.imageMode.trimmedForGeneration
+            ),
             bookBrief: BookBrief(
                 summary: summary,
                 themes: output.bookBrief.themes.cleanedGenerationStrings,
@@ -114,11 +134,41 @@ public struct AIModelOutputValidator: Sendable {
             altText: altText
         )
     }
+
+    private func rejectLongSourceQuotation(texts: [String], sourceText: String, anchor: String) throws {
+        let sourceWords = sourceText.normalizedQuoteWords
+        guard sourceWords.count >= 14 else {
+            return
+        }
+
+        let candidateTexts = texts.map(\.normalizedForQuoteDetection)
+        for startIndex in 0...(sourceWords.count - 14) {
+            let phrase = sourceWords[startIndex..<(startIndex + 14)].joined(separator: " ")
+            guard phrase.count >= 80 else {
+                continue
+            }
+            if candidateTexts.contains(where: { $0.contains(phrase) }) {
+                throw AIModelOutputValidationError.longSourceQuotation(anchor)
+            }
+        }
+    }
 }
 
 private extension String {
     var trimmedForGeneration: String {
         trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var normalizedForQuoteDetection: String {
+        lowercased()
+            .split { !$0.isLetter && !$0.isNumber }
+            .joined(separator: " ")
+    }
+
+    var normalizedQuoteWords: [String] {
+        normalizedForQuoteDetection
+            .split(separator: " ")
+            .map(String.init)
     }
 }
 

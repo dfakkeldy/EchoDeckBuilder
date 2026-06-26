@@ -22,7 +22,8 @@ public struct AIPromptPackageBuilder: Sendable {
         </source-outline>
 
         <representative-source-text>
-        \(request.sections.map(sourceSample).joined(separator: "\n\n"))
+        Showing \(representativeSections(from: request.sections).count) representative source samples from \(request.sections.count) sections.
+        \(representativeSections(from: request.sections).map(sourceSample).joined(separator: "\n\n"))
         </representative-source-text>
 
         <accepted-cards-to-avoid-duplicating>
@@ -166,8 +167,42 @@ public struct AIPromptPackageBuilder: Sendable {
         """
         <source-sample anchor=\"\(section.anchor.suffix)\">
         Heading: \(section.heading)
-        Text: \(section.text)
+        Text: \(section.text.truncatedForPromptSample(maxCharacters: 700))
         </source-sample>
         """
+    }
+
+    private func representativeSections(from sections: [BookSection]) -> [BookSection] {
+        let maximumSamples = 24
+        guard sections.count > maximumSamples else {
+            return sections
+        }
+
+        let firstSamples = sections.prefix(8)
+        let midpoint = sections.count / 2
+        let middleStart = max(0, midpoint - 4)
+        let middleSamples = sections[middleStart..<min(sections.count, middleStart + 8)]
+        let lastSamples = sections.suffix(8)
+
+        var seenIDs = Set<BookSection.ID>()
+        return (Array(firstSamples) + Array(middleSamples) + Array(lastSamples)).filter { section in
+            seenIDs.insert(section.id).inserted
+        }
+    }
+}
+
+private extension String {
+    func truncatedForPromptSample(maxCharacters: Int) -> String {
+        guard count > maxCharacters else {
+            return self
+        }
+
+        let endIndex = index(startIndex, offsetBy: maxCharacters)
+        let prefix = self[..<endIndex]
+        if let lastWhitespace = prefix.lastIndex(where: \.isWhitespace), lastWhitespace > startIndex {
+            return "\(self[..<lastWhitespace])..."
+        }
+
+        return "\(prefix)..."
     }
 }

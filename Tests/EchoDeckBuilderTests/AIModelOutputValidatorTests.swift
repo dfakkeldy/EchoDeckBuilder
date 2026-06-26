@@ -38,7 +38,24 @@ final class AIModelOutputValidatorTests: XCTestCase {
         XCTAssertEqual(result.cards[0].sourceAnchor.suffix, "s1-b1")
         XCTAssertEqual(result.cards[0].reviewState, .draft)
         XCTAssertEqual(result.cards[0].visual?.priority, .high)
+        XCTAssertEqual(result.cards[0].aiMetadata?.importance, 0.9)
+        XCTAssertEqual(result.cards[0].aiMetadata?.confidence, 0.8)
+        XCTAssertEqual(result.cards[0].aiMetadata?.rationale, "This is a central concept.")
+        XCTAssertEqual(result.runMetadata?.provider, "claude-cli")
+        XCTAssertEqual(result.runMetadata?.model, "default")
         XCTAssertEqual(result.warnings.map(\.message), ["Skipped acknowledgements."])
+    }
+
+    func testValidClozeOutputPreservesClozeText() throws {
+        let section = try makeSection(suffix: "s1-b1")
+        var output = AIModelOutput.validFixture(sourceAnchor: "s1-b1")
+        output.cards[0].kind = "cloze"
+        output.cards[0].clozeText = "A strategic anchor gives {{c1::a decision rule}} for choosing work."
+
+        let result = try AIModelOutputValidator().validate(output, batchSections: [section])
+
+        XCTAssertEqual(result.cards[0].kind, .cloze)
+        XCTAssertEqual(result.cards[0].clozeText, "A strategic anchor gives {{c1::a decision rule}} for choosing work.")
     }
 
     func testRejectsOutOfBatchAnchor() throws {
@@ -68,6 +85,24 @@ final class AIModelOutputValidatorTests: XCTestCase {
 
         XCTAssertThrowsError(try AIModelOutputValidator().validate(output, batchSections: [section])) { error in
             XCTAssertEqual(error as? AIModelOutputValidationError, .invalidClozeText("s1-b1"))
+        }
+    }
+
+    func testRejectsLongSourceQuotation() throws {
+        let anchor = try XCTUnwrap(SourceAnchor(suffix: "s1-b1"))
+        let copiedSentence = "Strategic anchors guide choices by naming the tradeoffs teams will accept when pressure makes every option feel urgent"
+        let section = BookSection(
+            spineIndex: 1,
+            blockIndex: 1,
+            heading: "Strategy",
+            text: "\(copiedSentence). A second sentence gives more context.",
+            anchor: anchor
+        )
+        var output = AIModelOutput.validFixture(sourceAnchor: "s1-b1")
+        output.cards[0].backText = copiedSentence
+
+        XCTAssertThrowsError(try AIModelOutputValidator().validate(output, batchSections: [section])) { error in
+            XCTAssertEqual(error as? AIModelOutputValidationError, .longSourceQuotation("s1-b1"))
         }
     }
 

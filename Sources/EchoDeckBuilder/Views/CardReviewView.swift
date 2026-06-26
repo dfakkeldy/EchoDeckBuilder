@@ -28,6 +28,14 @@ struct CardReviewView: View {
                         }
                     }
 
+                    if card.kind == .cloze {
+                        TextField(
+                            "Cloze",
+                            text: optionalTextBinding(cardID: cardID, keyPath: \.clozeText),
+                            axis: .vertical
+                        )
+                    }
+
                     HStack {
                         Button {
                             store.accept(cardID: cardID)
@@ -83,6 +91,18 @@ struct CardReviewView: View {
             get: { store.card(id: cardID)?.kind ?? .basic },
             set: { newValue in
                 store.update(cardID: cardID) { $0.kind = newValue }
+            }
+        )
+    }
+
+    private func optionalTextBinding(cardID: DeckCard.ID, keyPath: WritableKeyPath<DeckCard, String?>) -> Binding<String> {
+        Binding(
+            get: { store.card(id: cardID)?[keyPath: keyPath] ?? "" },
+            set: { newValue in
+                store.update(cardID: cardID) { card in
+                    let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+                    card[keyPath: keyPath] = trimmed.isEmpty ? nil : newValue
+                }
             }
         )
     }

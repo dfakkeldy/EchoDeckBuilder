@@ -61,6 +61,26 @@ final class AIPromptPackageBuilderTests: XCTestCase {
         XCTAssertFalse(prompt.contains("Rejected front"))
     }
 
+    func testBookBriefPromptUsesBoundedRepresentativeSourceSamples() throws {
+        let longText = String(repeating: "important context ", count: 70) + "TAIL_SHOULD_NOT_APPEAR"
+        let sections = try (1...30).map { index in
+            try makeSection(
+                suffix: "s1-b\(index)",
+                heading: "Heading \(index)",
+                text: index == 1 ? longText : "Representative text \(index)"
+            )
+        }
+        let request = CardGenerationRequest(sections: sections, settings: GenerationSettings(provider: .claudeCLI))
+
+        let prompt = AIPromptPackageBuilder().bookBriefPrompt(for: request)
+
+        XCTAssertTrue(prompt.contains("Showing 24 representative source samples from 30 sections."))
+        XCTAssertTrue(prompt.contains("<source-sample anchor=\"s1-b1\">"))
+        XCTAssertTrue(prompt.contains("<source-sample anchor=\"s1-b30\">"))
+        XCTAssertFalse(prompt.contains("<source-sample anchor=\"s1-b10\">"))
+        XCTAssertFalse(prompt.contains("TAIL_SHOULD_NOT_APPEAR"))
+    }
+
     func testBatchPromptIncludesVisualInstructionsForPromptMode() throws {
         let section = try makeSection(suffix: "s2-b4", heading: "Context", text: "Context prevents shallow cards.")
         let request = CardGenerationRequest(

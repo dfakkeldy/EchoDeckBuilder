@@ -11,6 +11,18 @@ public enum CardReviewState: String, Codable, CaseIterable, Sendable {
     case rejected
 }
 
+public struct CardAIMetadata: Codable, Hashable, Sendable {
+    public var importance: Double
+    public var confidence: Double
+    public var rationale: String
+
+    public init(importance: Double, confidence: Double, rationale: String) {
+        self.importance = importance
+        self.confidence = confidence
+        self.rationale = rationale
+    }
+}
+
 public struct DeckCard: Codable, Hashable, Identifiable, Sendable {
     public let id: UUID
     public var sectionID: BookSection.ID
@@ -21,6 +33,8 @@ public struct DeckCard: Codable, Hashable, Identifiable, Sendable {
     public var sourceAnchor: SourceAnchor
     public var reviewState: CardReviewState
     public var visual: CardVisual?
+    public var clozeText: String?
+    public var aiMetadata: CardAIMetadata?
 
     public init(
         id: UUID = UUID(),
@@ -31,7 +45,9 @@ public struct DeckCard: Codable, Hashable, Identifiable, Sendable {
         tags: [String] = [],
         sourceAnchor: SourceAnchor,
         reviewState: CardReviewState = .draft,
-        visual: CardVisual? = nil
+        visual: CardVisual? = nil,
+        clozeText: String? = nil,
+        aiMetadata: CardAIMetadata? = nil
     ) {
         self.id = id
         self.sectionID = sectionID
@@ -42,5 +58,7 @@ public struct DeckCard: Codable, Hashable, Identifiable, Sendable {
         self.sourceAnchor = sourceAnchor
         self.reviewState = reviewState
         self.visual = visual
+        self.clozeText = clozeText
+        self.aiMetadata = aiMetadata
     }
 }
