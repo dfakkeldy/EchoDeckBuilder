@@ -36,3 +36,13 @@
 ## Issues or concerns
 
 - None from this task. I did not run the broader package test suite because the brief only asked for the focused exporter filters.
+
+## Fix
+
+- Updated `testSourceOnlyEchoDeckJSONMatchesEchoImportVNextRequirements()` to assert the actual exported-card key set and the omitted Echo fields `source` and `echoBlockID`.
+- Commands run:
+  - `swift test --filter EchoDeckJSONExporterTests/testSourceOnlyEchoDeckJSONMatchesEchoImportVNextRequirements`
+  - `swift test --filter EchoDeckJSONExporterTests`
+- Results:
+  - Focused regression: PASS
+  - Exporter suite: PASS, 6 tests passed, 0 failures

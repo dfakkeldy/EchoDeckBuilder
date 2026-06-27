@@ -57,9 +57,11 @@ final class EchoDeckJSONExporterTests: XCTestCase {
         XCTAssertEqual(object["targetMediaID"] as? String, "file:///Users/example/Books/round-trip.epub")
         XCTAssertEqual(exportedCard["triggerTiming"] as? String, "manualOnly")
         XCTAssertEqual(exportedCard["sourceAnchor"] as? String, "s0-b1")
+        XCTAssertEqual(Set(exportedCard.keys), ["backText", "frontText", "sourceAnchor", "triggerTiming"])
         XCTAssertNil(exportedCard["startTime"])
         XCTAssertNil(exportedCard["endTime"])
-        XCTAssertNil(exportedCard["sourceText"])
+        XCTAssertNil(exportedCard["source"])
+        XCTAssertNil(exportedCard["echoBlockID"])
     }
 
     func testRejectedCardsAreNotExported() throws {
