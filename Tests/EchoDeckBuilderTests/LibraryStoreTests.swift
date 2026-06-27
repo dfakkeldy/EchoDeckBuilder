@@ -61,6 +61,25 @@ final class LibraryStoreTests: XCTestCase {
         XCTAssertFalse(store.canExportEchoDeck)
     }
 
+    func testRequestEchoExportPanelUsesReadinessMessage() throws {
+        let fixture = try makeFixture()
+        let store = LibraryStore(sections: [fixture.section], cards: [fixture.card])
+
+        store.requestEchoExportPanel()
+
+        XCTAssertEqual(store.statusMessage, "Set the exact Echo target media ID before export")
+
+        store.targetMediaID = "book"
+        store.requestEchoExportPanel()
+
+        XCTAssertEqual(store.statusMessage, "Accept at least one card before export")
+
+        store.accept(cardID: fixture.card.id)
+        store.requestEchoExportPanel()
+
+        XCTAssertEqual(store.statusMessage, "Ready to export 1 accepted Echo card")
+    }
+
     func testEchoDeckJSONDataUsesAcceptedCardsAndTargetMediaID() throws {
         let anchor = try XCTUnwrap(SourceAnchor(suffix: "s1-b1"))
         let section = BookSection(

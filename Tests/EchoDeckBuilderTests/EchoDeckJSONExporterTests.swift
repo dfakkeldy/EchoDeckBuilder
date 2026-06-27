@@ -197,4 +197,35 @@ final class EchoDeckJSONExporterTests: XCTestCase {
         XCTAssertEqual(summary.exportedCount, 2)
         XCTAssertEqual(summary.sourceAnchoredCount, 2)
     }
+
+    func testExportReadinessExplainsMissingTargetMediaID() throws {
+        let anchor = try XCTUnwrap(SourceAnchor(suffix: "s0-b1"))
+        var card = DeckCard(
+            sectionID: UUID(),
+            frontText: "Front",
+            backText: "Back",
+            kind: .basic,
+            sourceAnchor: anchor
+        )
+        card.reviewState = .accepted
+
+        let readiness = EchoDeckJSONExporter().readiness(targetMediaID: " ", cards: [card])
+
+        XCTAssertEqual(readiness, .missingTargetMediaID)
+    }
+
+    func testExportReadinessExplainsMissingAcceptedCards() throws {
+        let anchor = try XCTUnwrap(SourceAnchor(suffix: "s0-b1"))
+        let card = DeckCard(
+            sectionID: UUID(),
+            frontText: "Front",
+            backText: "Back",
+            kind: .basic,
+            sourceAnchor: anchor
+        )
+
+        let readiness = EchoDeckJSONExporter().readiness(targetMediaID: "book", cards: [card])
+
+        XCTAssertEqual(readiness, .missingAcceptedCards)
+    }
 }

@@ -16,6 +16,20 @@ public struct EchoDeckJSONExporter: Sendable {
         )
     }
 
+    public func readiness(targetMediaID: String, cards: [DeckCard]) -> EchoDeckExportReadiness {
+        let trimmedTarget = targetMediaID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedTarget.isEmpty else {
+            return .missingTargetMediaID
+        }
+
+        let acceptedCount = cards.filter { $0.reviewState == .accepted }.count
+        guard acceptedCount > 0 else {
+            return .missingAcceptedCards
+        }
+
+        return .ready(acceptedCount: acceptedCount)
+    }
+
     public func export(deckName: String, targetMediaID: String, cards: [DeckCard]) throws -> Data {
         let exportCards = cards
             .filter { $0.reviewState == .accepted }

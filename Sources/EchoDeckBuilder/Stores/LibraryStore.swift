@@ -98,7 +98,11 @@ public final class LibraryStore {
     }
 
     public var canExportEchoDeck: Bool {
-        !normalizedTargetMediaID.isEmpty && cards.contains { $0.reviewState == .accepted }
+        exportReadiness.canExport
+    }
+
+    public var exportReadiness: EchoDeckExportReadiness {
+        EchoDeckJSONExporter().readiness(targetMediaID: normalizedTargetMediaID, cards: cards)
     }
 
     public func selectSection(_ sectionID: BookSection.ID?) {
@@ -135,7 +139,7 @@ public final class LibraryStore {
     }
 
     public func requestEchoExportPanel() {
-        statusMessage = canExportEchoDeck ? "Echo deck export is ready" : "Accept at least one card and set a target media ID"
+        statusMessage = exportReadiness.message
     }
 
     public func importEPUB(at epubURL: URL) async {
