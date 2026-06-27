@@ -33,6 +33,35 @@ final class EchoDeckJSONExporterTests: XCTestCase {
         XCTAssertNil(cards.first?["echoBlockID"])
     }
 
+    func testSourceOnlyEchoDeckJSONMatchesEchoImportVNextRequirements() throws {
+        let anchor = try XCTUnwrap(SourceAnchor(suffix: "s0-b1"))
+        var card = DeckCard(
+            sectionID: UUID(),
+            frontText: "What does the first body paragraph establish?",
+            backText: "It establishes the first testable idea from the imported EPUB body.",
+            kind: .basic,
+            sourceAnchor: anchor
+        )
+        card.reviewState = .accepted
+
+        let data = try EchoDeckJSONExporter().export(
+            deckName: "Round Trip Proof",
+            targetMediaID: "file:///Users/example/Books/round-trip.epub",
+            cards: [card]
+        )
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let cards = try XCTUnwrap(object["cards"] as? [[String: Any]])
+        let exportedCard = try XCTUnwrap(cards.first)
+
+        XCTAssertEqual(object["deckName"] as? String, "Round Trip Proof")
+        XCTAssertEqual(object["targetMediaID"] as? String, "file:///Users/example/Books/round-trip.epub")
+        XCTAssertEqual(exportedCard["triggerTiming"] as? String, "manualOnly")
+        XCTAssertEqual(exportedCard["sourceAnchor"] as? String, "s0-b1")
+        XCTAssertNil(exportedCard["startTime"])
+        XCTAssertNil(exportedCard["endTime"])
+        XCTAssertNil(exportedCard["sourceText"])
+    }
+
     func testRejectedCardsAreNotExported() throws {
         let anchor = try XCTUnwrap(SourceAnchor(suffix: "s1-b1"))
         let rejected = DeckCard(
