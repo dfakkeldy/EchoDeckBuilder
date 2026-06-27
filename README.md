@@ -44,9 +44,10 @@ Reasoning:
 
 Likely end state:
 
-1. EchoDeckBuilder owns deck creation and review.
-2. Echo imports finished decks and displays cards anchored to EPUB blocks.
-3. A later Echo button can open EchoDeckBuilder for the current EPUB, or trigger a simplified built-in generator after the workflow is stable.
+1. EchoDeckBuilder proves the EPUB parsing, generation, review, and export workflow and validates that Echo deck JSON vNext imports cleanly.
+2. Echo owns native deck creation and review for imported books, including target media selection, persistence, privacy disclosure, and the in-context study experience.
+3. Echo resolves portable source anchors into local EPUB blocks and keeps anchored cards visible in the reader and study surfaces.
+4. Any long-term built-in generation or review flow ships in Echo, informed by what this Builder proof harness validated first.
 
 ## MVP
 
@@ -158,7 +159,7 @@ Local-first privacy rules:
 
 - EPUB extraction happens locally.
 - The user explicitly chooses any AI provider.
-- The current MVP generator is deterministic and local; real AI provider selection is intentionally out of scope for this first build.
+- The current MVP generator is deterministic and local; production AI provider selection is intentionally out of scope for this first build, even though developer CLI proof providers exist for Claude and Codex.
 - The app sends only selected chunks, not the entire book by default.
 - Generated cards should paraphrase source material and avoid long quotations.
 - Private copyrighted material must never be uploaded, shared, or bundled into examples.

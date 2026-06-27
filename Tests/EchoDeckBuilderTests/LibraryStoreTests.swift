@@ -228,6 +228,10 @@ final class LibraryStoreTests: XCTestCase {
         store.selectedGenerationProvider = .claudeCLI
         store.generationSettings.imageMode = .prompts
         store.targetMediaID = "  media-123  "
+        try await waitForGenerationAvailability(
+            store,
+            matching: .available("Claude CLI ready")
+        )
 
         store.generateCardsForSelectedBook()
         try await waitForGenerationToFinish(store)
@@ -358,6 +362,10 @@ final class LibraryStoreTests: XCTestCase {
         let store = LibraryStore(sections: [fixture.section], generator: generator)
 
         store.selectedGenerationProvider = .foundationModels
+        try await waitForGenerationAvailability(
+            store,
+            matching: .unavailable("Foundation Models generator is not connected yet")
+        )
 
         XCTAssertFalse(store.generationAvailability.isAvailable)
         XCTAssertEqual(
@@ -376,7 +384,7 @@ final class LibraryStoreTests: XCTestCase {
         XCTAssertEqual(callCount, 0)
     }
 
-    func testChangingSelectedGenerationProviderUpdatesAvailability() throws {
+    func testChangingSelectedGenerationProviderUpdatesAvailability() async throws {
         let fixture = try makeFixture()
         let store = LibraryStore(
             sections: [fixture.section],
@@ -388,9 +396,40 @@ final class LibraryStoreTests: XCTestCase {
         XCTAssertTrue(store.canGenerateCards)
 
         store.selectedGenerationProvider = .foundationModels
+        try await waitForGenerationAvailability(
+            store,
+            matching: .unavailable("Foundation Models requires macOS 26+")
+        )
 
         XCTAssertEqual(store.generationAvailability.message, "Foundation Models requires macOS 26+")
         XCTAssertFalse(store.canGenerateCards)
+    }
+
+    func testGenerationAvailabilityIsCachedBetweenReadsAndProviderRefreshes() async throws {
+        let fixture = try makeFixture()
+        let resolver = CountingAvailabilityResolver()
+        let store = LibraryStore(
+            sections: [fixture.section],
+            selectedGenerationProvider: .fixture,
+            generatorResolver: resolver
+        )
+
+        XCTAssertEqual(resolver.availabilityCallCount(for: .fixture), 1)
+
+        XCTAssertEqual(store.generationAvailability.message, "Fixture generator ready")
+        XCTAssertEqual(store.generationAvailability.message, "Fixture generator ready")
+        XCTAssertEqual(resolver.availabilityCallCount(for: .fixture), 1)
+
+        store.selectedGenerationProvider = .claudeCLI
+        try await waitForGenerationAvailability(
+            store,
+            matching: .available("Claude CLI ready")
+        )
+
+        XCTAssertEqual(resolver.availabilityCallCount(for: .claudeCLI), 1)
+        XCTAssertEqual(store.generationAvailability.message, "Claude CLI ready")
+        XCTAssertEqual(store.generationAvailability.message, "Claude CLI ready")
+        XCTAssertEqual(resolver.availabilityCallCount(for: .claudeCLI), 1)
     }
 
     private func makeFixture(
@@ -428,6 +467,26 @@ final class LibraryStoreTests: XCTestCase {
             try await Task.sleep(for: .milliseconds(10))
         }
         XCTFail("Timed out waiting for card generation to finish.", file: file, line: line)
+    }
+
+    private func waitForGenerationAvailability(
+        _ store: LibraryStore,
+        matching expected: CardGenerationAvailability,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) async throws {
+        for _ in 0..<100 {
+            if store.generationAvailability == expected {
+                return
+            }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        XCTFail(
+            "Timed out waiting for generation availability to become '\(expected.message)'.",
+            file: file,
+            line: line
+        )
     }
 
     private func yieldForMainActorWork() async {
@@ -576,5 +635,37 @@ private actor RecordingRequestGenerator: CardGenerator {
 
     func recordedRequest() -> CardGenerationRequest? {
         request
+    }
+}
+
+private final class CountingAvailabilityResolver: @unchecked Sendable, CardGeneratorResolving {
+    private let lock = NSLock()
+    private var counts: [CardGenerationProvider: Int] = [:]
+
+    func availability(for provider: CardGenerationProvider) -> CardGenerationAvailability {
+        lock.lock()
+        counts[provider, default: 0] += 1
+        lock.unlock()
+
+        switch provider {
+        case .fixture:
+            return .available("Fixture generator ready")
+        case .foundationModels:
+            return .unavailable("Foundation Models requires macOS 26+")
+        case .claudeCLI:
+            return .available("Claude CLI ready")
+        case .codexCLI:
+            return .available("Codex CLI ready")
+        }
+    }
+
+    func generator(for provider: CardGenerationProvider) -> any CardGenerator {
+        FixtureCardGenerator()
+    }
+
+    func availabilityCallCount(for provider: CardGenerationProvider) -> Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return counts[provider, default: 0]
     }
 }
