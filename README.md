@@ -33,6 +33,8 @@ additional App Store distribution permission.
 
 Build this as its own Mac app first, then add a small Echo integration once the file format is proven.
 
+Current product stance: EchoDeckBuilder is a proof harness, not the intended long-term user-facing product. Its job is to prove the EPUB parsing, AI generation, review, and Echo deck export workflow in a smaller macOS app. Once the workflow is proven, the deck-authoring feature should be folded into Echo so Echo owns the library context, target media ID, source block resolution, persistence, privacy disclosures, and study experience.
+
 Reasoning:
 
 - Deck generation is an authoring workflow: import EPUB, chunk text, choose AI settings, review/edit cards, inspect anchors, dedupe, tag, and export.
@@ -160,6 +162,8 @@ Local-first privacy rules:
 - The app sends only selected chunks, not the entire book by default.
 - Generated cards should paraphrase source material and avoid long quotations.
 - Private copyrighted material must never be uploaded, shared, or bundled into examples.
+
+The local CLI generation providers are developer proof paths, not local-first production features. Selecting Claude CLI or Codex CLI may send selected source text through the user's configured CLI provider. The final Echo feature must make this explicit before generation, and production hosted AI should be handled through Echo-owned consent, entitlement, metering, and privacy flows.
 
 ## Implementation Notes
 
