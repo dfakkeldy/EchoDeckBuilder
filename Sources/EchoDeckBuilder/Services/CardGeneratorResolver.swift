@@ -6,9 +6,17 @@ public protocol CardGeneratorResolving: Sendable {
 }
 
 public struct DefaultCardGeneratorResolver: CardGeneratorResolving {
-    public init() {}
+    private let commandAvailability: LocalCommandAvailability
+
+    public init(commandAvailability: LocalCommandAvailability = LocalCommandAvailability()) {
+        self.commandAvailability = commandAvailability
+    }
 
     public func availability(for provider: CardGenerationProvider) -> CardGenerationAvailability {
+        if let cliAvailability = commandAvailability.availability(for: provider) {
+            return cliAvailability
+        }
+
         switch provider {
         case .fixture:
             return .available("Fixture generator ready")
@@ -39,8 +47,18 @@ public struct DefaultCardGeneratorResolver: CardGeneratorResolving {
 
             return UnavailableCardGenerator(message: availability.message)
         case .claudeCLI:
+            let availability = availability(for: provider)
+            guard availability.isAvailable else {
+                return UnavailableCardGenerator(message: availability.message)
+            }
+
             return LocalClaudeCLIGenerator()
         case .codexCLI:
+            let availability = availability(for: provider)
+            guard availability.isAvailable else {
+                return UnavailableCardGenerator(message: availability.message)
+            }
+
             return LocalCodexCLIGenerator()
         }
     }
