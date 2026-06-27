@@ -310,30 +310,8 @@ public final class LibraryStore {
             let extractedURL = try await EPUBArchiveExtractor().extract(epubURL: epubURL)
             defer { try? FileManager.default.removeItem(at: extractedURL) }
 
-            let extractedResolver = EPUBPathResolver(rootURL: extractedURL)
-            let containerURL = try extractedResolver.resolveEPUBPath(
-                "META-INF/container.xml",
-                relativeTo: extractedURL
-            )
-            let containerData = try Data(contentsOf: containerURL)
-            let packagePath = try EPUBContainerParser().packagePath(from: containerData)
-            let packageURL = try extractedResolver.resolveEPUBPath(packagePath, relativeTo: extractedURL)
-            let packageData = try Data(contentsOf: packageURL)
-            let packageDirectory = packageURL.deletingLastPathComponent()
-            let spineItems = try EPUBManifestParser().spineItems(
-                fromPackageData: packageData,
-                packageDirectory: packageDirectory,
-                extractionRootURL: extractedURL
-            )
-            let extractor = XHTMLBlockExtractor()
-
-            var sections: [BookSection] = []
-            sections.reserveCapacity(spineItems.count)
-
-            for item in spineItems {
-                let data = try Data(contentsOf: item.fileURL)
-                sections.append(contentsOf: try extractor.sections(from: data, spineIndex: item.spineIndex))
-            }
+            let sections = try EchoCompatibleEPUBParser()
+                .sections(fromExtractedEPUBRoot: extractedURL)
 
             return ImportedBook(
                 deckName: epubURL.deletingPathExtension().lastPathComponent,
