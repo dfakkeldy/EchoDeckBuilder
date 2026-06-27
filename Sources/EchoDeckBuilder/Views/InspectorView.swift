@@ -26,6 +26,12 @@ struct InspectorView: View {
                         )
                 }
 
+                if let disclosure = store.selectedGenerationProvider.disclosureMessage {
+                    Text(disclosure)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
                 TextField("Model", text: generationBinding(\.model))
 
                 Stepper(
