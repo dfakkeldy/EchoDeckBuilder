@@ -40,3 +40,15 @@ Use this checklist to prove EchoDeckBuilder exports cards that Echo resolves bac
 - If Echo reports `targetAudiobookHasNoEPUBBlocks`, the target media ID does not match the imported EPUB's `audiobook_id`.
 - If Echo reports `sourceAnchorUnresolved`, Builder and Echo disagree about parser block offsets for the EPUB.
 - If Echo imports but the card has no reader/feed placement, inspect `FlashcardDAO.syncToTimeline`.
+
+## Latest Verified Proof Run
+
+- Date: 2026-06-27
+- EchoDeckBuilder commit: `3b1a9a7` code state before this proof-record docs commit.
+- Echo commit: `6bcde7e` in `/Users/dfakkeldy/.codex/worktrees/d883/Echo`.
+- EPUB used: Synthetic XCTest fixtures and in-memory Echo `epub_block` rows only; no private EPUB text or manual local book was used.
+- Generation provider: Fixture/synthetic test data.
+- Exported cards: EchoDeckBuilder exporter tests validated a source-only accepted card with `sourceAnchor` and no source text or Echo block ID; full Builder suite passed 107 tests.
+- Echo imported cards: 1 card in `DeckImportServiceTests.importDeckVNextResolvesSourceAnchor()`.
+- Echo resolved source-anchored cards: 1 card resolved to `epub-book-a-s1-b2`; `FlashcardDAOSchedulerTests.syncToTimelineCopiesSourceBlockID()` also verified timeline propagation.
+- Notes: Automated verification passed with `swift test`, `./script/build_and_run.sh --verify`, and Echo's focused `xcodebuild test` filters. The hands-on UI checklist above still needs one local EPUB imported into both apps to prove the end-user click path.

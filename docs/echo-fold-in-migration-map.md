@@ -33,3 +33,14 @@ EchoDeckBuilder is the proving ground for deck authoring. Echo is the intended l
 ## Migration Principle
 
 Builder proves behavior. Echo ships the feature.
+
+## Proof Completion Criteria
+
+Builder is ready to fold into Echo when:
+
+- Parser parity tests pass.
+- Builder exports source-only Echo deck JSON.
+- Echo imports that JSON for the same EPUB.
+- Echo resolves at least one generated card to a non-nil `sourceBlockID`.
+- Non-local generation providers disclose that source text may leave the device.
+- The remaining work is Echo-native UI and persistence, not proof of anchor mechanics.
