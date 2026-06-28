@@ -33,6 +33,37 @@ final class EchoDeckJSONExporterTests: XCTestCase {
         XCTAssertNil(cards.first?["echoBlockID"])
     }
 
+    func testSourceOnlyEchoDeckJSONMatchesEchoImportVNextRequirements() throws {
+        let anchor = try XCTUnwrap(SourceAnchor(suffix: "s0-b1"))
+        var card = DeckCard(
+            sectionID: UUID(),
+            frontText: "What does the first body paragraph establish?",
+            backText: "It establishes the first testable idea from the imported EPUB body.",
+            kind: .basic,
+            sourceAnchor: anchor
+        )
+        card.reviewState = .accepted
+
+        let data = try EchoDeckJSONExporter().export(
+            deckName: "Round Trip Proof",
+            targetMediaID: "file:///Users/example/Books/round-trip.epub",
+            cards: [card]
+        )
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let cards = try XCTUnwrap(object["cards"] as? [[String: Any]])
+        let exportedCard = try XCTUnwrap(cards.first)
+
+        XCTAssertEqual(object["deckName"] as? String, "Round Trip Proof")
+        XCTAssertEqual(object["targetMediaID"] as? String, "file:///Users/example/Books/round-trip.epub")
+        XCTAssertEqual(exportedCard["triggerTiming"] as? String, "manualOnly")
+        XCTAssertEqual(exportedCard["sourceAnchor"] as? String, "s0-b1")
+        XCTAssertEqual(Set(exportedCard.keys), ["backText", "frontText", "sourceAnchor", "triggerTiming"])
+        XCTAssertNil(exportedCard["startTime"])
+        XCTAssertNil(exportedCard["endTime"])
+        XCTAssertNil(exportedCard["source"])
+        XCTAssertNil(exportedCard["echoBlockID"])
+    }
+
     func testRejectedCardsAreNotExported() throws {
         let anchor = try XCTUnwrap(SourceAnchor(suffix: "s1-b1"))
         let rejected = DeckCard(
@@ -165,5 +196,36 @@ final class EchoDeckJSONExporterTests: XCTestCase {
         XCTAssertEqual(summary.rejectedCount, 1)
         XCTAssertEqual(summary.exportedCount, 2)
         XCTAssertEqual(summary.sourceAnchoredCount, 2)
+    }
+
+    func testExportReadinessExplainsMissingTargetMediaID() throws {
+        let anchor = try XCTUnwrap(SourceAnchor(suffix: "s0-b1"))
+        var card = DeckCard(
+            sectionID: UUID(),
+            frontText: "Front",
+            backText: "Back",
+            kind: .basic,
+            sourceAnchor: anchor
+        )
+        card.reviewState = .accepted
+
+        let readiness = EchoDeckJSONExporter().readiness(targetMediaID: " ", cards: [card])
+
+        XCTAssertEqual(readiness, .missingTargetMediaID)
+    }
+
+    func testExportReadinessExplainsMissingAcceptedCards() throws {
+        let anchor = try XCTUnwrap(SourceAnchor(suffix: "s0-b1"))
+        let card = DeckCard(
+            sectionID: UUID(),
+            frontText: "Front",
+            backText: "Back",
+            kind: .basic,
+            sourceAnchor: anchor
+        )
+
+        let readiness = EchoDeckJSONExporter().readiness(targetMediaID: "book", cards: [card])
+
+        XCTAssertEqual(readiness, .missingAcceptedCards)
     }
 }

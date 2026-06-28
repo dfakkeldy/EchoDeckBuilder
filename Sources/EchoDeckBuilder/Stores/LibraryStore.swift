@@ -13,7 +13,15 @@ public final class LibraryStore {
     public var statusMessage: String
     public var generationSettings: GenerationSettings
     public var isInspectorPresented: Bool
-    public var selectedGenerationProvider: CardGenerationProvider
+    public var selectedGenerationProvider: CardGenerationProvider {
+        didSet {
+            guard selectedGenerationProvider != oldValue else {
+                return
+            }
+            refreshGenerationAvailability()
+        }
+    }
+    public private(set) var generationAvailability: CardGenerationAvailability
     public private(set) var isGeneratingCards: Bool
     public private(set) var isImportingEPUB: Bool
     public private(set) var latestBookBrief: BookBrief?
@@ -21,6 +29,7 @@ public final class LibraryStore {
 
     private let generatorResolver: any CardGeneratorResolving
     @ObservationIgnored private var generationTask: Task<Void, Never>?
+    @ObservationIgnored private var generationAvailabilityRefreshTask: Task<Void, Never>?
     @ObservationIgnored private var generationToken: UUID?
     @ObservationIgnored private var importToken: UUID?
 
@@ -56,6 +65,7 @@ public final class LibraryStore {
         self.generationSettings = GenerationSettings()
         self.isInspectorPresented = true
         self.selectedGenerationProvider = selectedGenerationProvider
+        self.generationAvailability = generatorResolver.availability(for: selectedGenerationProvider)
         self.isGeneratingCards = false
         self.isImportingEPUB = false
         self.latestBookBrief = nil
@@ -89,16 +99,16 @@ public final class LibraryStore {
         return card
     }
 
-    public var generationAvailability: CardGenerationAvailability {
-        generatorResolver.availability(for: selectedGenerationProvider)
-    }
-
     public var canGenerateCards: Bool {
         !sections.isEmpty && !isGeneratingCards && !isImportingEPUB && generationAvailability.isAvailable
     }
 
     public var canExportEchoDeck: Bool {
-        !normalizedTargetMediaID.isEmpty && cards.contains { $0.reviewState == .accepted }
+        exportReadiness.canExport
+    }
+
+    public var exportReadiness: EchoDeckExportReadiness {
+        EchoDeckJSONExporter().readiness(targetMediaID: normalizedTargetMediaID, cards: cards)
     }
 
     public func selectSection(_ sectionID: BookSection.ID?) {
@@ -135,7 +145,7 @@ public final class LibraryStore {
     }
 
     public func requestEchoExportPanel() {
-        statusMessage = canExportEchoDeck ? "Echo deck export is ready" : "Accept at least one card and set a target media ID"
+        statusMessage = exportReadiness.message
     }
 
     public func importEPUB(at epubURL: URL) async {
@@ -347,6 +357,23 @@ public final class LibraryStore {
         generationTask = nil
         generationToken = nil
         isGeneratingCards = false
+    }
+
+    private func refreshGenerationAvailability() {
+        let provider = selectedGenerationProvider
+        generationAvailabilityRefreshTask?.cancel()
+        generationAvailability = .unavailable("Checking \(provider.displayName) availability...")
+        generationAvailabilityRefreshTask = Task { [generatorResolver] in
+            let availability = await Task.detached(priority: .utility) {
+                generatorResolver.availability(for: provider)
+            }.value
+
+            guard !Task.isCancelled, selectedGenerationProvider == provider else {
+                return
+            }
+
+            generationAvailability = availability
+        }
     }
 
     nonisolated private static func loadImportedBook(from epubURL: URL) async throws -> ImportedBook {

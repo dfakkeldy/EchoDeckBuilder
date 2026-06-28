@@ -24,3 +24,25 @@ public struct EchoDeckExportSummary: Equatable, Sendable {
         self.sourceAnchoredCount = sourceAnchoredCount
     }
 }
+
+public struct EchoDeckExportReadiness: Equatable, Sendable {
+    public var canExport: Bool
+    public var message: String
+
+    public static let missingTargetMediaID = EchoDeckExportReadiness(
+        canExport: false,
+        message: "Set the exact Echo target media ID before export"
+    )
+
+    public static let missingAcceptedCards = EchoDeckExportReadiness(
+        canExport: false,
+        message: "Accept at least one card before export"
+    )
+
+    public static func ready(acceptedCount: Int) -> EchoDeckExportReadiness {
+        EchoDeckExportReadiness(
+            canExport: true,
+            message: "Ready to export \(acceptedCount) accepted Echo card\(acceptedCount == 1 ? "" : "s")"
+        )
+    }
+}

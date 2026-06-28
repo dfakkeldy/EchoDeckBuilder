@@ -4,6 +4,8 @@ struct InspectorView: View {
     @Bindable var store: LibraryStore
 
     var body: some View {
+        let availability = store.generationAvailability
+
         Form {
             Section("Deck") {
                 TextField("Deck name", text: $store.deckName)
@@ -18,12 +20,18 @@ struct InspectorView: View {
                 }
 
                 LabeledContent("Availability") {
-                    Text(store.generationAvailability.message)
+                    Text(availability.message)
                         .foregroundStyle(
-                            store.generationAvailability.isAvailable
+                            availability.isAvailable
                                 ? AnyShapeStyle(.secondary)
                                 : AnyShapeStyle(.red)
                         )
+                }
+
+                if let disclosure = store.selectedGenerationProvider.disclosureMessage {
+                    Text(disclosure)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
 
                 TextField("Model", text: generationBinding(\.model))

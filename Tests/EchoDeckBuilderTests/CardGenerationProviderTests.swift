@@ -66,6 +66,51 @@ final class CardGenerationProviderTests: XCTestCase {
         let cards = try await resolver.generator(for: .fixture).generateCards(for: [])
         XCTAssertEqual(cards, [])
     }
+
+    func testDefaultResolverReportsMissingClaudeCLI() {
+        let resolver = DefaultCardGeneratorResolver(
+            commandAvailability: LocalCommandAvailability { command in
+                command != "claude"
+            }
+        )
+
+        let availability = resolver.availability(for: .claudeCLI)
+
+        XCTAssertFalse(availability.isAvailable)
+        XCTAssertEqual(availability.message, "Install and authenticate Claude CLI to use this provider")
+    }
+
+    func testDefaultResolverReportsAvailableCodexCLI() {
+        let resolver = DefaultCardGeneratorResolver(
+            commandAvailability: LocalCommandAvailability { command in
+                command == "codex"
+            }
+        )
+
+        let availability = resolver.availability(for: .codexCLI)
+
+        XCTAssertTrue(availability.isAvailable)
+        XCTAssertEqual(availability.message, "Codex CLI ready")
+    }
+
+    func testDefaultResolverShortCircuitsMissingClaudeCLIGenerator() async throws {
+        let resolver = DefaultCardGeneratorResolver(
+            commandAvailability: LocalCommandAvailability { command in
+                command != "claude"
+            }
+        )
+
+        let generator = resolver.generator(for: .claudeCLI)
+
+        do {
+            _ = try await generator.generateCards(for: CardGenerationRequest(sections: []))
+            XCTFail("Expected the unavailable generator to throw")
+        } catch CardGenerationError.unavailable(let message) {
+            XCTAssertEqual(message, "Install and authenticate Claude CLI to use this provider")
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
+    }
 }
 
 private struct StaticCardGenerator: CardGenerator {

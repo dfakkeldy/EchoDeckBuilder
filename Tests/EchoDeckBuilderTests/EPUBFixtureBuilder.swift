@@ -126,6 +126,67 @@ struct TestEPUBFixture {
         return TestEPUBFixture(epubURL: epubURL, rootURL: rootURL)
     }
 
+    static func makeFrontMatterAndBodyMatterFixture() throws -> TestEPUBFixture {
+        let rootURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("EchoDeckBuilderTests-\(UUID().uuidString)", isDirectory: true)
+        let contentRoot = rootURL.appendingPathComponent("content", isDirectory: true)
+        let metaInfURL = contentRoot.appendingPathComponent("META-INF", isDirectory: true)
+        let epubURL = rootURL.appendingPathComponent("front-matter-bodymatter.epub")
+
+        try FileManager.default.createDirectory(at: metaInfURL, withIntermediateDirectories: true)
+
+        try Data("""
+        <?xml version="1.0" encoding="UTF-8"?>
+        <container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+          <rootfiles>
+            <rootfile full-path="content.opf" media-type="application/oebps-package+xml"/>
+          </rootfiles>
+        </container>
+        """.utf8).write(to: metaInfURL.appendingPathComponent("container.xml"))
+
+        try Data("""
+        <?xml version="1.0" encoding="UTF-8"?>
+        <package xmlns="http://www.idpf.org/2007/opf" version="3.0">
+          <manifest>
+            <item id="cover" href="cover.xhtml" media-type="application/xhtml+xml"/>
+            <item id="chapter" href="chapter.xhtml" media-type="application/xhtml+xml"/>
+          </manifest>
+          <spine>
+            <itemref idref="cover" linear="no"/>
+            <itemref idref="chapter"/>
+          </spine>
+          <guide>
+            <reference type="text" href="chapter.xhtml"/>
+          </guide>
+        </package>
+        """.utf8).write(to: contentRoot.appendingPathComponent("content.opf"))
+
+        try Data("""
+        <?xml version="1.0" encoding="UTF-8"?>
+        <html xmlns="http://www.w3.org/1999/xhtml">
+          <head><title>Cover</title></head>
+          <body>
+            <h1>Cover</h1>
+            <p>Marketing copy that should not become a generated study section.</p>
+          </body>
+        </html>
+        """.utf8).write(to: contentRoot.appendingPathComponent("cover.xhtml"))
+
+        try Data("""
+        <?xml version="1.0" encoding="UTF-8"?>
+        <html xmlns="http://www.w3.org/1999/xhtml">
+          <head><title>Chapter One</title></head>
+          <body>
+            <h1>Chapter One</h1>
+            <p>The first real body paragraph.</p>
+          </body>
+        </html>
+        """.utf8).write(to: contentRoot.appendingPathComponent("chapter.xhtml"))
+
+        try zipDirectory(contentRoot, outputURL: epubURL)
+        return TestEPUBFixture(epubURL: epubURL, rootURL: rootURL)
+    }
+
     private static func zipDirectory(_ directoryURL: URL, outputURL: URL) throws {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/zip")
